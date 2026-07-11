@@ -59,7 +59,11 @@ export default function SignupPage() {
     }
 
     // Fire-and-forget — don't block signup on email delivery failure
-    fetch('/api/email/welcome', { method: 'POST' }).catch(() => {
+    fetch('/api/email/welcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: data.email, name: data.name || data.email.split('@')[0] }),
+    }).catch(() => {
       // Non-critical — email failure should not block the user
     });
 

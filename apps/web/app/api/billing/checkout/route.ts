@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { stripe } from '@/lib/stripe'
 
 export const runtime = 'nodejs'
@@ -9,7 +10,9 @@ export async function POST() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: sub } = await supabase
+  const db = createServiceClient()
+
+  const { data: sub } = await db
     .from('subscriptions')
     .select('stripe_customer_id')
     .eq('user_id', user.id)
@@ -23,7 +26,7 @@ export async function POST() {
       metadata: { supabase_user_id: user.id },
     })
     customerId = customer.id
-    await supabase
+    await db
       .from('subscriptions')
       .upsert({ user_id: user.id, stripe_customer_id: customerId }, { onConflict: 'user_id' })
   }

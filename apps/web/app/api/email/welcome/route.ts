@@ -1,31 +1,28 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { resend } from '@/lib/email'
 
 export const runtime = 'nodejs'
 
-export async function POST() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export async function POST(req: Request) {
+  let email: string | undefined
+  let name: string | undefined
 
-  if (!user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const body = await req.json()
+    email = typeof body?.email === 'string' ? body.email : undefined
+    name = typeof body?.name === 'string' ? body.name : undefined
+  } catch {
+    return NextResponse.json({ ok: false })
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('display_name')
-    .eq('id', user.id)
-    .single()
-
-  const name = profile?.display_name ?? user.email.split('@')[0]
+  if (!email || !name) {
+    return NextResponse.json({ ok: false })
+  }
 
   try {
     const { error } = await resend.emails.send({
       from: process.env.FROM_EMAIL!,
-      to: user.email,
+      to: email,
       subject: 'Welcome to sisiGo 🌀',
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">

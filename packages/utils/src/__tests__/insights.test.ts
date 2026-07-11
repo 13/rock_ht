@@ -39,9 +39,11 @@ function makeCompletion(habitId: string, date: string, hour = 9): CompletionRow 
 function makeStreak(habitId: string, current: number, longest: number): StreakRow {
   return {
     habit_id: habitId,
+    user_id: 'user-1',
     current_streak: current,
     longest_streak: longest,
     last_completed_date: '2026-07-10',
+    updated_at: '2026-07-10T00:00:00Z',
   }
 }
 
