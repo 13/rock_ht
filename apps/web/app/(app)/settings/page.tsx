@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { Check, Download, Upload, Bell, BellOff, AlertCircle } from "lucide-react";
+import { Check, Download, Upload, Bell, BellOff, AlertCircle, CreditCard, Sparkles } from "lucide-react";
+import { useSubscription } from "@/hooks/use-subscription";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
@@ -52,6 +53,19 @@ export default function SettingsPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [requestingNotif, setRequestingNotif] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isPro, plan, currentPeriodEnd } = useSubscription();
+
+  async function handleUpgrade() {
+    const res = await fetch('/api/billing/checkout', { method: 'POST' })
+    const { url } = await res.json()
+    window.location.href = url
+  }
+
+  async function handleManageBilling() {
+    const res = await fetch('/api/billing/portal', { method: 'POST' })
+    const { url } = await res.json()
+    window.location.href = url
+  }
 
   async function handleRequestNotifications() {
     setRequestingNotif(true);
@@ -197,6 +211,48 @@ export default function SettingsPage() {
             <Button variant="destructive" size="sm" onClick={signOut}>
               Sign out
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Plan & Billing */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Plan & Billing</CardTitle>
+            </div>
+            <CardDescription>Manage your subscription</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium capitalize">{plan}</span>
+                {isPro && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                    <Sparkles className="h-3 w-3" /> Pro
+                  </span>
+                )}
+              </div>
+              {isPro && currentPeriodEnd && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Renews {new Date(currentPeriodEnd).toLocaleDateString()}
+                </p>
+              )}
+              {!isPro && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  5 habits · No AI features
+                </p>
+              )}
+            </div>
+            {isPro ? (
+              <Button variant="outline" size="sm" onClick={handleManageBilling}>
+                Manage billing
+              </Button>
+            ) : (
+              <Button size="sm" onClick={handleUpgrade}>
+                Upgrade to Pro
+              </Button>
+            )}
           </CardContent>
         </Card>
 
