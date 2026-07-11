@@ -8,14 +8,17 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsc",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "date-fns": "^4.1.0"
   },
   "devDependencies": {
     "@sisigo/types": "*",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }
