@@ -1,0 +1,24 @@
+-- ============================================================
+-- sisiGo: Development Seed Data
+-- ============================================================
+-- This file is for local development only.
+-- Do NOT run in production.
+-- ============================================================
+
+-- Create a test user (requires supabase auth.users entry first)
+-- Run: supabase auth create-user test@sisigo.app --password testpass123
+-- Then insert profile manually or let the trigger handle it.
+
+-- Example habits for the test user (replace UUID with actual auth user ID)
+-- do $$
+-- declare
+--   v_user_id uuid := 'YOUR-USER-UUID-HERE';
+-- begin
+--   insert into public.habits (user_id, title, icon, color, frequency, sort_order) values
+--     (v_user_id, 'Morning Run',    '🏃', '#22c55e', '{"type":"daily"}',                              0),
+--     (v_user_id, 'Read 30 min',    '📚', '#6366f1', '{"type":"daily"}',                              1),
+--     (v_user_id, 'Meditate',       '🧘', '#8b5cf6', '{"type":"specific_days","days":[1,2,3,4,5]}',   2),
+--     (v_user_id, 'Drink water',    '💧', '#06b6d4', '{"type":"daily"}',                              3),
+--     (v_user_id, 'Workout',        '💪', '#ef4444', '{"type":"times_per_week","count":3}',           4);
+-- end;
+-- $$;

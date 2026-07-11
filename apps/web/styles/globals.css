@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base design tokens ────────────────────────────────────── */
+@layer base {
+  :root {
+    --radius: 0.75rem;
+  }
+
+  /* ── Light theme ── */
+  [data-theme="light"], .light {
+    --background:       0 0% 98%;
+    --foreground:       240 10% 10%;
+    --card:             0 0% 100%;
+    --card-foreground:  240 10% 10%;
+    --popover:          0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary:          243 75% 59%;    /* indigo-500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary:        240 5% 96%;
+    --secondary-foreground: 240 6% 25%;
+    --muted:            240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent:           240 5% 96%;
+    --accent-foreground: 240 6% 25%;
+    --destructive:      0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border:           240 6% 90%;
+    --input:            240 6% 90%;
+    --ring:             243 75% 59%;
+    --success:          142 71% 45%;
+    --streak:           25 95% 53%;
+  }
+
+  /* ── Dark theme ── */
+  [data-theme="dark"], .dark {
+    --background:       240 10% 6%;
+    --foreground:       240 5% 92%;
+    --card:             240 10% 9%;
+    --card-foreground:  240 5% 92%;
+    --popover:          240 10% 9%;
+    --popover-foreground: 240 5% 92%;
+    --primary:          243 75% 64%;   /* indigo-400 */
+    --primary-foreground: 0 0% 100%;
+    --secondary:        240 7% 14%;
+    --secondary-foreground: 240 5% 76%;
+    --muted:            240 7% 14%;
+    --muted-foreground: 240 5% 55%;
+    --accent:           240 7% 14%;
+    --accent-foreground: 240 5% 92%;
+    --destructive:      0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:           240 7% 15%;
+    --input:            240 7% 15%;
+    --ring:             243 75% 64%;
+    --success:          142 69% 50%;
+    --streak:           25 95% 53%;
+  }
+
+  /* ── Midnight theme ── */
+  [data-theme="midnight"] {
+    --background:       0 0% 0%;
+    --foreground:       240 5% 88%;
+    --card:             240 6% 7%;
+    --card-foreground:  240 5% 88%;
+    --popover:          240 6% 7%;
+    --popover-foreground: 240 5% 88%;
+    --primary:          262 83% 68%;   /* violet-400 */
+    --primary-foreground: 0 0% 100%;
+    --secondary:        240 5% 12%;
+    --secondary-foreground: 240 5% 65%;
+    --muted:            240 5% 12%;
+    --muted-foreground: 240 4% 45%;
+    --accent:           240 5% 12%;
+    --accent-foreground: 240 5% 88%;
+    --destructive:      0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:           240 5% 13%;
+    --input:            240 5% 13%;
+    --ring:             262 83% 68%;
+    --success:          142 69% 50%;
+    --streak:           262 83% 68%;
+  }
+
+  /* ── Forest theme ── */
+  [data-theme="forest"] {
+    --background:       150 25% 5%;
+    --foreground:       140 20% 90%;
+    --card:             150 20% 9%;
+    --card-foreground:  140 20% 90%;
+    --popover:          150 20% 9%;
+    --popover-foreground: 140 20% 90%;
+    --primary:          142 71% 45%;   /* emerald-500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary:        150 15% 14%;
+    --secondary-foreground: 140 15% 70%;
+    --muted:            150 15% 14%;
+    --muted-foreground: 140 12% 50%;
+    --accent:           150 15% 14%;
+    --accent-foreground: 140 20% 90%;
+    --destructive:      0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:           150 15% 15%;
+    --input:            150 15% 15%;
+    --ring:             142 71% 45%;
+    --success:          142 71% 45%;
+    --streak:           142 71% 45%;
+  }
+
+  /* ── Sunset theme ── */
+  [data-theme="sunset"] {
+    --background:       20 30% 5%;
+    --foreground:       30 20% 90%;
+    --card:             20 25% 9%;
+    --card-foreground:  30 20% 90%;
+    --popover:          20 25% 9%;
+    --popover-foreground: 30 20% 90%;
+    --primary:          340 82% 59%;   /* rose-500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary:        20 20% 14%;
+    --secondary-foreground: 30 15% 65%;
+    --muted:            20 20% 14%;
+    --muted-foreground: 30 12% 48%;
+    --accent:           20 20% 14%;
+    --accent-foreground: 30 20% 90%;
+    --destructive:      0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border:           20 18% 15%;
+    --input:            20 18% 15%;
+    --ring:             340 82% 59%;
+    --success:          142 69% 50%;
+    --streak:           25 95% 53%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+    font-variation-settings: "opsz" 32;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Focus ring */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+/* ── Utility classes ────────────────────────────────────────── */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-violet-400 bg-clip-text text-transparent;
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-md border border-border/50;
+  }
+
+  .habit-glow {
+    box-shadow: 0 0 20px -5px var(--habit-color, hsl(var(--primary)));
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 20px;
+  }
+}

@@ -1,0 +1,63 @@
+name: Deploy mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: all
+        type: choice
+        options: [all, ios, android]
+      profile:
+        description: EAS build profile
+        required: true
+        default: production
+        type: choice
+        options: [production, preview, development]
+
+concurrency:
+  group: deploy-mobile
+  cancel-in-progress: false
+
+jobs:
+  eas-build:
+    name: EAS Build (${{ inputs.platform || 'all' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build (EAS)
+        working-directory: apps/mobile
+        run: |
+          eas build \
+            --platform ${{ inputs.platform || 'all' }} \
+            --profile ${{ inputs.profile || 'production' }} \
+            --non-interactive \
+            --no-wait
+
+      # Submit is a separate manual step — uncomment when ready for store delivery
+      # - name: Submit to stores
+      #   working-directory: apps/mobile
+      #   run: eas submit --platform ${{ inputs.platform || 'all' }} --non-interactive
