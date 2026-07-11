@@ -196,6 +196,8 @@ export interface Database {
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           plan: string;
+          status: string | null;
+          current_period_end: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -204,6 +206,8 @@ export interface Database {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           plan?: string;
+          status?: string | null;
+          current_period_end?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -212,6 +216,8 @@ export interface Database {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           plan?: string;
+          status?: string | null;
+          current_period_end?: string | null;
           updated_at?: string;
         };
         Relationships: [
