@@ -7,8 +7,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Loader2, Mail, Lock } from "lucide-react";
+import { Loader2, Mail, Lock, Chrome } from "lucide-react";
 import { useSupabase } from "@/providers/supabase-provider";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const schema = z.object({
@@ -28,6 +29,16 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  async function handleGoogleLogin() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) setServerError(error.message);
+  }
 
   async function onSubmit(data: FormData) {
     setServerError(null);
@@ -139,6 +150,25 @@ export default function LoginPage() {
             {isSubmitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-card px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={handleGoogleLogin}
+        >
+          <Chrome className="mr-2 h-4 w-4" />
+          Continue with Google
+        </Button>
       </div>
 
       <p className="text-center text-sm text-muted-foreground mt-4">
