@@ -1,4 +1,5 @@
 // apps/web/next.config.mjs
+import { withSentryConfig } from '@sentry/nextjs'
 
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
@@ -64,4 +65,11 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  hideSourceMaps: true,
+  disableLogger: true,
+})
