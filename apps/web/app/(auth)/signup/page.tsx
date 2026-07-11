@@ -58,6 +58,11 @@ export default function SignupPage() {
       return;
     }
 
+    // Fire-and-forget — don't block signup on email delivery failure
+    fetch('/api/email/welcome', { method: 'POST' }).catch(() => {
+      // Non-critical — email failure should not block the user
+    });
+
     setSuccess(true);
   }
 
