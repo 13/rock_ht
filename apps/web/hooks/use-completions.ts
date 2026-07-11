@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuth } from "./use-auth";
+import { posthog } from "@/lib/posthog";
 import {
   getLast30DaysCompletions,
   getTodayCompletions,
@@ -92,6 +93,11 @@ export function useCompletions() {
       }
 
       return { previous };
+    },
+    onSuccess: (result) => {
+      if (result.action === "added") {
+        posthog.capture("habit_completed", { habit_id: result.completion.habit_id });
+      }
     },
     onError: (_err, _input, context) => {
       if (context?.previous) {

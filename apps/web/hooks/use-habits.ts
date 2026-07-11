@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuth } from "./use-auth";
 import { useSubscription } from "./use-subscription";
+import { posthog } from "@/lib/posthog";
 import {
   getHabits,
   createHabit,
@@ -46,6 +47,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old ? [...old, newHabit] : [newHabit]
       );
+      posthog.capture("habit_created");
     },
   });
 
