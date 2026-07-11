@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useHabits } from "@/hooks/use-habits";
 import { PRESET_ICONS, PRESET_COLORS } from "@sisigo/types";
 import type {
   CreateHabitInput,
@@ -37,6 +38,10 @@ interface HabitFormProps {
 }
 
 export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps) {
+  const { isAtHabitLimit } = useHabits();
+  // Only enforce limit when creating a new habit, not when editing an existing one
+  const atLimit = !initial && isAtHabitLimit;
+
   const {
     register,
     handleSubmit,
@@ -381,14 +386,33 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps) {
         <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex-1"
-        >
-          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {initial ? "Save changes" : "Create habit"}
-        </Button>
+        {atLimit ? (
+          <div className="flex-1 text-sm text-amber-500 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+            Free plan is limited to 5 habits.{" "}
+            <button
+              type="button"
+              className="font-medium underline"
+              onClick={() =>
+                fetch("/api/billing/checkout", { method: "POST" })
+                  .then((r) => r.json())
+                  .then((d) => {
+                    window.location.href = d.url;
+                  })
+              }
+            >
+              Upgrade to Pro
+            </button>
+          </div>
+        ) : (
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="flex-1"
+          >
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {initial ? "Save changes" : "Create habit"}
+          </Button>
+        )}
       </div>
     </form>
   );

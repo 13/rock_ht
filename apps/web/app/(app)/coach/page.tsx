@@ -9,6 +9,7 @@ import { useAiCoach } from "@/hooks/use-ai-coach";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
 import { useStreaks } from "@/hooks/use-streaks";
+import { useSubscription } from "@/hooks/use-subscription";
 import { weeklyConsistencyScore } from "@sisigo/utils";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,7 @@ function TypingIndicator() {
 }
 
 export default function CoachPage() {
+  const { isPro, isLoading: isSubLoading } = useSubscription();
   const { messages, isStreaming, error, sendMessage, clearMessages } = useAiCoach();
   const { habits } = useHabits();
   const { monthCompletions } = useCompletions();
@@ -67,6 +69,30 @@ export default function CoachPage() {
   }
 
   const isFirstMessage = messages.length === 0;
+
+  if (!isSubLoading && !isPro) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+        <div className="text-4xl">✨</div>
+        <h2 className="text-xl font-semibold">AI Coach is a Pro feature</h2>
+        <p className="text-muted-foreground max-w-sm">
+          Get personalized habit coaching powered by AI. Upgrade to Pro to unlock.
+        </p>
+        <button
+          className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity"
+          onClick={() =>
+            fetch("/api/billing/checkout", { method: "POST" })
+              .then((r) => r.json())
+              .then((d) => {
+                window.location.href = d.url;
+              })
+          }
+        >
+          Upgrade to Pro
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

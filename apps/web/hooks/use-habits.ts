@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuth } from "./use-auth";
+import { useSubscription } from "./use-subscription";
 import {
   getHabits,
   createHabit,
@@ -17,6 +18,7 @@ import type {
   HabitWithFrequency,
   UpdateHabitInput,
 } from "@sisigo/types";
+import { habitLimitForPlan } from "@sisigo/utils";
 
 export const HABITS_KEY = ["habits"] as const;
 
@@ -30,6 +32,7 @@ export function useHabits() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const db = asDbClient(supabase);
+  const { plan } = useSubscription();
 
   const query = useQuery({
     queryKey: HABITS_KEY,
@@ -112,8 +115,13 @@ export function useHabits() {
     },
   });
 
+  const habits = query.data ?? [];
+  const activeHabits = habits.filter((h) => !h.is_archived);
+  const limit = habitLimitForPlan(plan);
+  const isAtHabitLimit = activeHabits.length >= limit;
+
   return {
-    habits: query.data ?? [],
+    habits,
     isLoading: query.isLoading,
     error: query.error,
     createHabit: createMutation.mutateAsync,
@@ -123,5 +131,6 @@ export function useHabits() {
     reorderHabits: reorderMutation.mutate,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
+    isAtHabitLimit,
   };
 }
