@@ -1,5 +1,13 @@
 import "../global.css";
+import * as Sentry from "@sentry/react-native";
 import { useEffect, useRef } from "react";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: __DEV__ ? "development" : "production",
+  tracesSampleRate: __DEV__ ? 0 : 0.1,
+  enabled: !__DEV__,
+});
 import { Slot, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -91,7 +99,7 @@ function AuthGuard() {
   return <Slot />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppProviders>
@@ -100,3 +108,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(RootLayout);
