@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getHabits } from "@sisigo/db";
 import { buildHabitSuggestionsSystem } from "@/lib/ai-context";
+import { rateLimit } from "@/lib/rate-limit";
 import type { TypedSupabaseClient } from "@sisigo/db";
 
 export const runtime = "nodejs";
@@ -24,6 +25,11 @@ export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const allowed = rateLimit(`ai_suggest:${user.id}`, 5, 24 * 60 * 60 * 1000) // 5 req/day
+  if (!allowed) {
+    return Response.json({ error: 'Rate limit exceeded. Try again tomorrow.' }, { status: 429 })
+  }
 
   const db = asDb(supabase);
   const habits = await getHabits(db, user.id);

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getHabits, getStreaks, getLast30DaysCompletions } from "@sisigo/db";
 import { buildCoachSystemPrompt } from "@/lib/ai-context";
+import { rateLimit } from "@/lib/rate-limit";
 import type { TypedSupabaseClient } from "@sisigo/db";
 
 export const runtime = "nodejs";
@@ -23,6 +24,11 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const allowed = rateLimit(`ai_coach:${user.id}`, 20, 60 * 60 * 1000) // 20 req/hour
+  if (!allowed) {
+    return Response.json({ error: 'Rate limit exceeded. Try again later.' }, { status: 429 })
+  }
 
   const { messages }: { messages: ChatMessage[] } = await req.json();
   if (!messages?.length) {

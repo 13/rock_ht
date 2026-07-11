@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getHabits, getLast30DaysCompletions, getTodayCompletions } from "@sisigo/db";
 import { buildJournalPromptSystem } from "@/lib/ai-context";
+import { rateLimit } from "@/lib/rate-limit";
 import { today } from "@sisigo/utils";
 import type { TypedSupabaseClient } from "@sisigo/db";
 
@@ -19,6 +20,11 @@ export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const allowed = rateLimit(`ai_journal:${user.id}`, 10, 24 * 60 * 60 * 1000) // 10 req/day
+  if (!allowed) {
+    return Response.json({ error: 'Rate limit exceeded. Try again tomorrow.' }, { status: 429 })
+  }
 
   const db = asDb(supabase);
   const todayStr = today();
