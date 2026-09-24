@@ -1,0 +1,73 @@
+name: Android APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # attach APK to the GitHub release
+    env:
+      NODE_ENV: production
+      # expo-router is nested in apps/mobile/node_modules while babel-preset-expo
+      # is hoisted to the root; without this Metro can't inline EXPO_ROUTER_APP_ROOT
+      NODE_PATH: ${{ github.workspace }}/apps/mobile/node_modules
+      # Inlined into the JS bundle by Metro at build time
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      # NOTE: release build is signed with the debug keystore committed in
+      # apps/mobile/android/app (see build.gradle). Fine for sideloading;
+      # swap in a real upload key before shipping to Play Store.
+      - name: Assemble release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        id: apk
+        run: |
+          name="sisigo-${GITHUB_REF_NAME//\//-}.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$name"
+          echo "path=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sisigo-android-apk
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.path }}
+          generate_release_notes: true

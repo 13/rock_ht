@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { resend } from '@/lib/email'
+import { getResend } from '@/lib/email'
 
 export const runtime = 'nodejs'
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: process.env.FROM_EMAIL!,
       to: email,
       subject: 'Welcome to sisiGo 🌀',

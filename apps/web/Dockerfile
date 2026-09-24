@@ -20,8 +20,8 @@ RUN npm ci --prefer-offline
 FROM node:20-alpine AS builder
 WORKDIR /repo
 
-COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules 2>/dev/null || true
+# Copy whole deps tree: root node_modules plus any nested workspace node_modules
+COPY --from=deps /repo ./
 
 # Copy full source (packages first so Next can transpile them)
 COPY packages/ ./packages/
@@ -38,7 +38,8 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /repo/apps/web
-RUN npm run build
+# public/ is optional in the repo but the runner stage copies it
+RUN mkdir -p public && npm run build
 
 # ─── Stage 3: runner ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -52,13 +53,14 @@ ENV NODE_ENV=production \
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
-# Next.js standalone output bundles everything needed
+# Next.js standalone output bundles everything needed. In a monorepo it mirrors
+# the repo layout, so server.js lands in apps/web/.
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/static   ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/public          ./public
+COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/static   ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/public          ./apps/web/public
 
 USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

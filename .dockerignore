@@ -1,0 +1,16 @@
+**/node_modules
+**/.next
+**/.turbo
+**/.expo
+**/dist
+**/build
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.*.example
+.git
+.github
+apps/mobile
+supabase/.branches
+supabase/.temp
+*.log
