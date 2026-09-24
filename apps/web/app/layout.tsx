@@ -3,7 +3,7 @@ import { Providers } from "@/providers/providers";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: {
     template: "%s | sisiGo",
     default: "sisiGo — Build habits that stick",
