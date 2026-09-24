@@ -25,12 +25,13 @@ magick "$SRC" -alpha set -fuzz 3% -fill none \
   -draw "color 0,0 floodfill" -draw "color $((W-1)),0 floodfill" \
   -draw "color 0,$((H-1)) floodfill" -draw "color $((W-1)),$((H-1)) floodfill" \
   -channel A -morphology Erode Disk:1 +channel \
-  -trim +repage "$CUT"
+  -trim +repage -define png:exclude-chunks=date,time "$CUT"
 
 # fit <size> <inner> <bg|none> <out>: rock scaled to fit inner×inner, centered on size×size
 fit() {
   magick "$CUT" -resize "$2x$2" -background "$3" -gravity center -extent "$1x$1" \
-    $([ "$3" != none ] && echo "-alpha remove -alpha off") "$4"
+    $([ "$3" != none ] && echo "-alpha remove -alpha off") \
+    -define png:exclude-chunks=date,time "$4"
 }
 
 # 2. Web
@@ -44,20 +45,21 @@ magick "$CUT" -background none -gravity center \
   \( -clone 0 -resize 16x16 -extent 16x16 \) \
   \( -clone 0 -resize 32x32 -extent 32x32 \) \
   \( -clone 0 -resize 48x48 -extent 48x48 \) \
-  -delete 0 "$WEB/app/favicon.ico"
+  -delete 0 -strip "$WEB/app/favicon.ico"
 magick -size 1200x630 "xc:$BG" \
   \( "$CUT" -resize 420x420 \) -gravity center -geometry -250+0 -composite \
   -fill '#e5e7eb' -font "$FONT_BOLD" -pointsize 110 -gravity center -annotate +230-20 'sisiGo' \
   -fill '#9ca3af' -font "$FONT" -pointsize 34 -annotate +230+70 'Build habits that stick' \
-  "$WEB/app/opengraph-image.png"
+  -define png:exclude-chunks=date,time "$WEB/app/opengraph-image.png"
 
 # 3. Mobile (Expo)
 fit 1024 860 "$BG" "$MOB/icon.png"
 fit 1024 640 none  "$MOB/adaptive-icon.png"                    # 66% safe zone
 fit 512  512 none  "$MOB/rock.png"
-magick -size 1284x2778 "xc:$BG" \( "$CUT" -resize 520x520 \) -gravity center -composite "$MOB/splash.png"
+magick -size 1284x2778 "xc:$BG" \( "$CUT" -resize 520x520 \) -gravity center -composite \
+  -define png:exclude-chunks=date,time "$MOB/splash.png"
 magick "$CUT" -alpha extract -threshold 50% -background black -alpha shape \
   -fill white -colorize 100 -resize 80x80 -background none -gravity center -extent 96x96 \
-  "$MOB/notification-icon.png"
+  -define png:exclude-chunks=date,time "$MOB/notification-icon.png"
 
 echo "brand assets generated"
