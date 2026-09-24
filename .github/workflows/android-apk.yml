@@ -50,7 +50,8 @@ jobs:
       # swap in a real upload key before shipping to Play Store.
       - name: Assemble release APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease --no-daemon
+        # gradle.properties pins org.gradle.java.home to a local path; use the runner JDK
+        run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
       - name: Rename APK
         id: apk
