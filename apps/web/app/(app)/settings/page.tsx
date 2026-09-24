@@ -330,7 +330,7 @@ export default function SettingsPage() {
                       Notifications enabled
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      You'll receive reminders for habits with a set reminder time.
+                      You’ll receive reminders for habits with a set reminder time.
                     </p>
                   </div>
                 </div>
@@ -349,7 +349,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Enable browser notifications to get reminded when it's time for a habit.
+                    Enable browser notifications to get reminded when it’s time for a habit.
                   </p>
                   <Button
                     onClick={handleRequestNotifications}

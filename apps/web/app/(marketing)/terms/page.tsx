@@ -20,13 +20,13 @@ export default function TermsPage() {
         <p>By using sisiGo you agree to these terms. If you do not agree, do not use the service.</p>
 
         <h2>Description of service</h2>
-        <p>sisiGo is a habit tracking application. We provide the service on an "as is" basis and may modify, suspend, or discontinue features at any time.</p>
+        <p>sisiGo is a habit tracking application. We provide the service on an “as is” basis and may modify, suspend, or discontinue features at any time.</p>
 
         <h2>Your account</h2>
         <p>You are responsible for maintaining the security of your account. Notify us immediately if you suspect unauthorized access. You must be at least 13 years old to use sisiGo.</p>
 
         <h2>Acceptable use</h2>
-        <p>You may not use sisiGo to violate any laws, infringe intellectual property rights, distribute malware, or attempt to gain unauthorized access to our systems or other users' accounts.</p>
+        <p>You may not use sisiGo to violate any laws, infringe intellectual property rights, distribute malware, or attempt to gain unauthorized access to our systems or other users’ accounts.</p>
 
         <h2>Subscriptions and billing</h2>
         <p>The Free plan is free indefinitely. The Pro plan is billed monthly. You may cancel at any time from Settings; your Pro access continues until the end of the current billing period. We do not offer refunds for partial months.</p>

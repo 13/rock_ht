@@ -151,7 +151,7 @@ export default function JournalPage() {
                 {format(new Date(), "EEEE, MMMM d")}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Today's reflection
+                Today’s reflection
               </p>
             </div>
             <div className="flex items-center gap-3">

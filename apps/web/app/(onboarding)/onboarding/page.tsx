@@ -217,7 +217,7 @@ function DoneStep({ habitCount, onFinish }: { habitCount: number; onFinish: () =
         🎉
       </motion.div>
       <h2 className="text-3xl font-bold text-foreground mb-3">
-        You're all set!
+        You’re all set!
       </h2>
       <p className="text-muted-foreground mb-2">
         {habitCount > 0
@@ -225,7 +225,7 @@ function DoneStep({ habitCount, onFinish }: { habitCount: number; onFinish: () =
           : "Your dashboard is ready."}
       </p>
       <p className="text-sm text-muted-foreground mb-8">
-        Consistency is built one day at a time. Let's start today.
+        Consistency is built one day at a time. Let’s start today.
       </p>
       <Button size="lg" onClick={onFinish} className="w-full text-base">
         Open my dashboard

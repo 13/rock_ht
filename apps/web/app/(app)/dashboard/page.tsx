@@ -294,7 +294,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                    Today's reflection
+                    Today’s reflection
                   </p>
                   {todayEntry ? (
                     <p className="text-sm text-foreground line-clamp-2 leading-relaxed">
