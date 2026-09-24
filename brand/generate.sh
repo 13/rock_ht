@@ -13,9 +13,11 @@ MOB=apps/mobile/assets
 mkdir -p brand/build "$WEB/public/icons" "$WEB/public/brand" "$MOB"
 
 # Pick an installed sans font (names differ per distro); override with FONT=/FONT_BOLD= env.
-font() { magick -list font | awk '/Font:/{print $2}' | grep -iE "$1" | head -1; }
+font() { magick -list font | awk '/Font:/{print $2}' | grep -iE "$1" | head -1 || true; }
 FONT_BOLD=${FONT_BOLD:-$(font '^(Inter|DejaVu-Sans|Adwaita-Sans|Liberation-Sans|Noto-Sans)-Bold$')}
 FONT=${FONT:-$(font '^(Inter|DejaVu-Sans|Adwaita-Sans|Liberation-Sans|Noto-Sans)(-Regular)?$')}
+: "${FONT_BOLD:?no bold sans font found; set FONT_BOLD=<name from magick -list font>}"
+: "${FONT:?no sans font found; set FONT=<name from magick -list font>}"
 
 # 1. Transparent, trimmed master: flood-fill black from the corners, erode 1px fringe.
 W=$(magick identify -format %w "$SRC"); H=$(magick identify -format %h "$SRC")
