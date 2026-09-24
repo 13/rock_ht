@@ -9,7 +9,7 @@
     "scheme": "sisigo",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#0a0a0f"
     },
     "assetBundlePatterns": [

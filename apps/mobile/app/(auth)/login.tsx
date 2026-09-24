@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
@@ -66,7 +67,12 @@ export default function LoginScreen() {
             entering={FadeInDown.delay(0).duration(400)}
             className="items-center mb-10"
           >
-            <Text className="text-5xl mb-3">✨</Text>
+            <Image
+              source={require("@/assets/rock.png")}
+              style={{ width: 72, height: 72 }}
+              resizeMode="contain"
+              className="mb-3"
+            />
             <Text className="text-2xl font-bold text-foreground tracking-tight">
               sisiGo
             </Text>
