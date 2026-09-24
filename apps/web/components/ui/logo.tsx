@@ -16,7 +16,7 @@ export function LogoMark({ className, size = 32 }: LogoMarkProps) {
       width={size}
       height={size}
       className={cn("shrink-0 object-contain", className)}
-      priority
+      loading="eager"
     />
   );
 }
