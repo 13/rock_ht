@@ -21,6 +21,8 @@
  * expo-router is installed in apps/mobile/node_modules while @expo/router-server
  * is hoisted under expo's own node_modules, and needs to resolve expo-router's
  * internal modules from apps/mobile/node_modules.
+ *
+ * Fallback if this breaks: run `npx expo start --offline` once to let Expo write .expo/types/router.d.ts.
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -31,27 +33,39 @@ const typesDirectory = path.join(projectRoot, ".expo", "types");
 
 process.env.EXPO_ROUTER_APP_ROOT = appRoot;
 
-const { requireContext } = require("expo-router/internal/testing");
-const { EXPO_ROUTER_CTX_IGNORE } = require("expo-router/_ctx-shared");
+let requireContext, EXPO_ROUTER_CTX_IGNORE, getTypedRoutesDeclarationFile;
 
-// `@expo/router-server` is not hoisted to a resolvable location from
-// apps/mobile (it lives under expo's own nested node_modules), so resolve it
-// relative to the `@expo/cli` package that ships inside the installed `expo`
-// package, the same way `expo start` loads it internally.
-const expoCliDir = path.dirname(
-  require.resolve("@expo/cli/package.json", {
-    paths: [path.dirname(require.resolve("expo/package.json"))],
-  })
-);
-const { getTypedRoutesDeclarationFile } = require(
-  require.resolve("@expo/router-server/build/typed-routes/generate", { paths: [expoCliDir] })
-);
+try {
+  ({ requireContext } = require("expo-router/internal/testing"));
+  ({ EXPO_ROUTER_CTX_IGNORE } = require("expo-router/_ctx-shared"));
+
+  // `@expo/router-server` is not hoisted to a resolvable location from
+  // apps/mobile (it lives under expo's own nested node_modules), so resolve it
+  // relative to the `@expo/cli` package that ships inside the installed `expo`
+  // package, the same way `expo start` loads it internally.
+  const expoCliDir = path.dirname(
+    require.resolve("@expo/cli/package.json", {
+      paths: [path.dirname(require.resolve("expo/package.json"))],
+    })
+  );
+  ({ getTypedRoutesDeclarationFile } = require(
+    require.resolve("@expo/router-server/build/typed-routes/generate", { paths: [expoCliDir] })
+  ));
+} catch (err) {
+  console.error(
+    "typegen: Expo Router's internal typed-routes generator could not be loaded (Expo SDK upgrade?). " +
+    "Update apps/mobile/scripts/typegen.js, or fall back to running `npx expo start --offline` " +
+    "until .expo/types/router.d.ts appears."
+  );
+  console.error("Error:", err.message);
+  process.exit(1);
+}
 
 const ctx = requireContext(appRoot, true, EXPO_ROUTER_CTX_IGNORE);
 const declarationFile = getTypedRoutesDeclarationFile(ctx, {});
 
-if (!declarationFile) {
-  console.error("typegen: failed to generate typed routes declaration file");
+if (typeof declarationFile !== "string" || !declarationFile.includes("declare module 'expo-router'")) {
+  console.error("typegen: generator returned unexpected output; refusing to write router.d.ts");
   process.exit(1);
 }
 
