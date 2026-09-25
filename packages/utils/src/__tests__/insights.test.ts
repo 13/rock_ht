@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateInsights, completionsByHour, peakHour } from '../insights'
-import { formatDate } from '../dates'
+import { addDaysToDate } from '../dates'
 import type { HabitWithFrequency, CompletionRow, StreakRow } from '@sisigo/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -194,10 +194,8 @@ describe('generateInsights', () => {
   it('generates milestone insight at 100-day streak with trophy emoji', () => {
     const habits = [makeHabit('h1')]
     const completions = Array.from({ length: 100 }, (_, i) => {
-      const d = new Date('2026-01-01')
-      d.setDate(d.getDate() + i)
-      const dateStr = formatDate(d)
-      return makeCompletion('h1', dateStr!)
+      const dateStr = addDaysToDate('2026-01-01', i)
+      return makeCompletion('h1', dateStr)
     })
     const streaks = [makeStreak('h1', 100, 100)]
     const result = generateInsights(habits, completions, streaks)
@@ -242,10 +240,8 @@ describe('generateInsights', () => {
     const habits = [makeHabit('h1', 'Daily Reading')]
     // Create 27 completions out of 30 days
     const completions = Array.from({ length: 27 }, (_, i) => {
-      const d = new Date('2026-06-12')
-      d.setDate(d.getDate() + i)
-      const dateStr = formatDate(d)
-      return makeCompletion('h1', dateStr!)
+      const dateStr = addDaysToDate('2026-06-12', i)
+      return makeCompletion('h1', dateStr)
     })
     const streaks = [makeStreak('h1', 5, 10)]
     const result = generateInsights(habits, completions, streaks)
@@ -288,10 +284,8 @@ describe('generateInsights', () => {
   it('generates total completion milestone at 10+ completions', () => {
     const habits = [makeHabit('h1')]
     const completions = Array.from({ length: 12 }, (_, i) => {
-      const d = new Date('2026-06-01')
-      d.setDate(d.getDate() + i)
-      const dateStr = formatDate(d)
-      return makeCompletion('h1', dateStr!)
+      const dateStr = addDaysToDate('2026-06-01', i)
+      return makeCompletion('h1', dateStr)
     })
     const streaks = [makeStreak('h1', 1, 1)]
     const result = generateInsights(habits, completions, streaks)
@@ -358,10 +352,8 @@ describe('generateInsights', () => {
     const habits = [makeHabit('h1', 'Exercise')]
     // Create completions for multiple weeks to test improvement logic
     const completions = Array.from({ length: 20 }, (_, i) => {
-      const d = new Date('2026-06-20')
-      d.setDate(d.getDate() + i)
-      const dateStr = formatDate(d)
-      return makeCompletion('h1', dateStr!)
+      const dateStr = addDaysToDate('2026-06-20', i)
+      return makeCompletion('h1', dateStr)
     })
     const streaks = [makeStreak('h1', 6, 6)]
     const result = generateInsights(habits, completions, streaks)
