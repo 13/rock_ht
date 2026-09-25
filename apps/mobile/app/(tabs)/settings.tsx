@@ -10,11 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { useLocal } from "@/providers/local-provider";
 import { useNotifications } from "@/hooks/use-notifications";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 import { hapticLight, hapticError } from "@/lib/haptics";
+import { exportToShareSheet, importFromPicker } from "@/lib/backup";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -137,6 +139,7 @@ export default function SettingsScreen() {
   const { isGranted, isLoading, requestPermission, sendTest } =
     useNotifications();
   const [notifEnabled, setNotifEnabled] = useState(false);
+  const queryClient = useQueryClient();
 
   function handleSignOut() {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -183,6 +186,30 @@ export default function SettingsScreen() {
     }
     await sendTest();
     Alert.alert("Test sent", "You'll receive a test notification in 3 seconds.");
+  }
+
+  async function handleExport() {
+    hapticLight();
+    try {
+      await exportToShareSheet(store, userId);
+    } catch (e) {
+      hapticError();
+      Alert.alert("Export failed", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleImport() {
+    hapticLight();
+    try {
+      const result = await importFromPicker(store, userId);
+      if (!result) return;
+      await queryClient.invalidateQueries();
+      await rebuildRemindersFromStore(store, userId);
+      Alert.alert("Import complete", `${result.imported} items restored, ${result.skipped} already up to date.`);
+    } catch (e) {
+      hapticError();
+      Alert.alert("Import failed", e instanceof Error ? e.message : String(e));
+    }
   }
 
   return (
@@ -273,6 +300,14 @@ export default function SettingsScreen() {
             label="Send test notification"
             onPress={handleTestNotification}
           />
+        </SectionCard>
+
+        {/* Data */}
+        <SectionHeader title="Data" />
+        <SectionCard>
+          <SettingRow icon="download-outline" label="Export data" onPress={handleExport} />
+          <Divider />
+          <SettingRow icon="cloud-upload-outline" label="Import data" onPress={handleImport} />
         </SectionCard>
 
         {/* App */}
