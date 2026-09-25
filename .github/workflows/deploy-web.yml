@@ -16,7 +16,9 @@ env:
 
 jobs:
   check-secrets:
+    name: Check deploy secrets
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
