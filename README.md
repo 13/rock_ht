@@ -130,12 +130,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ### Mobile (`apps/mobile`)
 
-Mobile reads Supabase credentials at runtime. Create `apps/mobile/.env`:
-
-```env
-EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-```
+The mobile app needs **no env vars**: it runs fully offline, with local SQLite as its store,
+no login and no network required. Optionally set `EXPO_PUBLIC_SENTRY_DSN` in
+`apps/mobile/.env` for crash reporting (Sentry is a no-op without it); see
+`apps/mobile/.env.local.example`. Build with `scripts/build-apk.sh` (`--install <serial>`
+also installs on a connected device).
 
 > Variables prefixed `EXPO_PUBLIC_` are bundled into the app. Never put service-role keys here.
 
