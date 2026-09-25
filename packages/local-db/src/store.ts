@@ -1,9 +1,13 @@
-import { completionId, type OutboxEntry, type SyncChange, type SyncLocal, type SyncRow, type SyncTable } from '@rock_ht/sync'
+import {
+  completionId, isNewer, SYNC_TABLES,
+  type OutboxEntry, type SyncChange, type SyncLocal, type SyncRow, type SyncTable,
+} from '@rock_ht/sync'
 import { parseFrequency, frequencyToJson, today } from '@rock_ht/utils'
 import type {
   CompletionRow, CreateHabitInput, CreateJournalEntryInput, HabitRow, HabitWithFrequency, JournalEntry,
   ProfileRow, ToggleCompletionInput, UpdateHabitInput, UpdateJournalEntryInput, UpdateProfileInput,
 } from '@rock_ht/types'
+import { BACKUP_FORMAT, BACKUP_VERSION, type Backup } from './backup'
 import { COLUMNS, fromSqlRow, toSqlRow } from './codec'
 import type { SqlDriver, SqlParam } from './driver'
 
@@ -246,6 +250,49 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     })
   }
 
+  async function exportBackup(userId: string): Promise<Backup> {
+    const tables: Record<SyncTable, SyncRow[]> = {
+      profiles: await selectRows('profiles', 'id = ?', [userId]),
+      habits: await selectRows('habits', 'user_id = ?', [userId]),
+      habit_completions: await selectRows('habit_completions', 'user_id = ?', [userId]),
+      journal_entries: await selectRows('journal_entries', 'user_id = ?', [userId]),
+    }
+    return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exported_at: now(), tables }
+  }
+
+  /** Merge a backup into userId's data in one transaction; see the import rules in Task 8. */
+  async function importBackup(userId: string, backup: Backup): Promise<{ imported: number; skipped: number }> {
+    let imported = 0
+    let skipped = 0
+    await driver.transaction(async (tx) => {
+      for (const table of SYNC_TABLES) {
+        for (const src of backup.tables[table]) {
+          if (table === 'profiles') {
+            const local = await getRow('profiles', userId, tx)
+            const row: SyncRow = {
+              ...src, id: userId, created_at: local?.created_at ?? src.created_at, updated_at: now(), deleted_at: null,
+            }
+            await upsert(tx, table, row)
+            await enqueue(tx, table, row)
+            imported++
+            continue
+          }
+          const incoming: SyncRow = { ...src, user_id: userId }
+          const existing = await getRow(table, incoming.id, tx)
+          if (existing && !existing.deleted_at && !isNewer(incoming, existing)) {
+            skipped++
+            continue
+          }
+          const row: SyncRow = { ...incoming, deleted_at: null, updated_at: now() }
+          await upsert(tx, table, row)
+          await enqueue(tx, table, row)
+          imported++
+        }
+      }
+    })
+    return { imported, skipped }
+  }
+
   async function getMeta(key: string, db: SqlDriver = driver) {
     const r = await db.first<{ value: string | null }>('SELECT value FROM meta WHERE key = ?', [key])
     return r?.value ?? null
@@ -329,6 +376,7 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     listJournal, createJournal, updateJournal, deleteJournal,
     getMeta: (key: string) => getMeta(key),
     setMeta: (key: string, value: string | null) => setMeta(key, value),
+    exportBackup, importBackup,
     claim, sync,
   }
 }
