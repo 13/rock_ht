@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Switch } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Switch, Platform } from "react-native";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
@@ -8,7 +8,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PRESET_ICONS, PRESET_COLORS } from "@rock_ht/types";
 import { hapticLight } from "@/lib/haptics";
-import { requestNotificationPermission } from "@/lib/notifications";
+import {
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+} from "@/lib/notifications";
 import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 import { useTheme } from "@/theme/theme-provider";
 
@@ -83,6 +86,16 @@ export function MobileHabitForm({
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [notificationHint, setNotificationHint] = useState(false);
 
+  // On mount, if the reminder was already on (editing an existing habit),
+  // surface the permission hint if it's not actually granted.
+  useEffect(() => {
+    if (initial?.reminder_enabled) {
+      getNotificationPermissionStatus().then((status) => {
+        setNotificationHint(status !== "granted");
+      });
+    }
+  }, [initial?.reminder_enabled]);
+
   async function handleReminderToggle(value: boolean) {
     hapticLight();
     setValue("reminderEnabled", value);
@@ -97,6 +110,16 @@ export function MobileHabitForm({
   function handleTimeChange(event: DateTimePickerEvent, date?: Date) {
     setShowTimePicker(false);
     if (event.type === "set" && date) {
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mm = String(date.getMinutes()).padStart(2, "0");
+      setValue("reminderTime", `${hh}:${mm}`);
+    }
+  }
+
+  // iOS's inline/compact picker fires onChange on every wheel tick and has
+  // no dialog to dismiss, so just write the time without hiding anything.
+  function handleTimeChangeIOS(_event: DateTimePickerEvent, date?: Date) {
+    if (date) {
       const hh = String(date.getHours()).padStart(2, "0");
       const mm = String(date.getMinutes()).padStart(2, "0");
       setValue("reminderTime", `${hh}:${mm}`);
@@ -386,31 +409,43 @@ export function MobileHabitForm({
           <Switch
             value={reminderEnabled}
             onValueChange={handleReminderToggle}
-            trackColor={{ false: colors.elevated, true: selectedColor }}
+            trackColor={{ false: colors.switchTrackOff, true: selectedColor }}
             thumbColor={colors.onPrimary}
           />
         </View>
 
         {reminderEnabled && (
           <>
-            <TouchableOpacity
-              onPress={() => {
-                hapticLight();
-                setShowTimePicker(true);
-              }}
-              style={{
-                marginTop: 10,
-                alignSelf: "flex-start",
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: colors.muted,
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                {reminderTime}
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS === "ios" ? (
+              // The compact picker IS the time chip on iOS — no chip-then-picker double tap.
+              <DateTimePicker
+                mode="time"
+                display="compact"
+                themeVariant={colors.statusBar === "dark" ? "light" : "dark"}
+                value={timeStringToDate(reminderTime)}
+                onChange={handleTimeChangeIOS}
+                style={{ alignSelf: "flex-start", marginTop: 10 }}
+              />
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setShowTimePicker(true);
+                }}
+                style={{
+                  marginTop: 10,
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: colors.muted,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                  {reminderTime}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {notificationHint && (
               <Text style={{ color: colors.warning, fontSize: 12, marginTop: 8 }}>
@@ -419,7 +454,7 @@ export function MobileHabitForm({
               </Text>
             )}
 
-            {showTimePicker && (
+            {Platform.OS === "android" && showTimePicker && (
               <DateTimePicker
                 mode="time"
                 is24Hour
