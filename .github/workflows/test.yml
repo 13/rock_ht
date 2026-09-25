@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tz: [UTC, Pacific/Kiritimati, Pacific/Pago_Pago]
+        tz: [UTC, Pacific/Kiritimati, Pacific/Pago_Pago, America/New_York]
     env:
       TZ: ${{ matrix.tz }}
     steps:
