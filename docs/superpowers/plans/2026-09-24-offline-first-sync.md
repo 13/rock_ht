@@ -18,6 +18,7 @@ Revised after the P0 timezone fixes (c6c4195), the rename to `rock_ht` (91c5876)
 - **Server fixes:** `sync_push_for` no longer nulls `display_name` on `claim()`; the Supabase streak function (roadmap #16) uses `profiles.timezone`; the self-host schema drops `entry_date default current_date`.
 - **Tooling:** CI already runs `npx turbo run test` in a 4-timezone matrix (the old Task 1 Step 6 is dropped); mobile type-checks run `typegen` first; `better-sqlite3 ^12.10` (Node 20–26 prebuilds); Better Auth pinned to 1.7.6 with its Expo peers (option names verified against the 1.7.6 type definitions); URL scheme `rockht`; `expo-sqlite` driver uses `withExclusiveTransactionAsync` and forwards generics; `fetch` mocks typed as `vi.fn<typeof fetch>()`.
 - **Android specifics:** `apps/mobile/android/` is committed, so Expo config plugins and `expo-build-properties` do not apply. Native changes (cleartext for user-configured LAN servers) are made directly in `AndroidManifest.xml` and `res/xml/`; autolinking is enough for new Expo modules. The self-host deploy gate in `deploy-web.yml` is changed so the image builds without Supabase secrets.
+- **Review-driven M1 fixes:** the final whole-branch review of M1 found a midnight-rollover bug (screens computed `todayStr`/`yesterdayStr` once at render), a stale-snapshot/lost-optimistic-update bug in the one-tap toggle, and a deleted-habit's completions still counting toward streaks/exports. Fixed with a new `apps/mobile/hooks/use-today.ts` hook (local date kept current across app resume and local midnight, used by `use-completions.ts` and the Today/Habits screens), a new `toggleCompletion` store method that flips a completion based on the row it reads inside its own write transaction (plus a restored optimistic update in `use-completions.ts`'s toggle mutation), and a `deleted_at IS NULL` habit filter on every `habit_completions` read (`listCompletions`, `exportBackup`). The M2/M4 carry-over checklists above (Task 10, 11, 14) record what the same review found in those milestones' own code.
 
 ## Global Constraints
 
@@ -2534,6 +2535,14 @@ git commit -m "build(mobile): build the offline app without Supabase env and dro
 
 ### Task 10: Sync engine
 
+**Carry-over from M1 review:**
+- `applyRemote` must compare `isNewer` inside its own transaction, not against a pre-transaction read (`packages/local-db/src/store.ts` `sync.applyRemote`).
+- `claim` must not bump `updated_at` on every re-queued row — keep each row's original `updated_at` (bump only the profile, and only on sign-up) (`packages/local-db/src/store.ts` `claim`).
+- Make the test helper driver queue bare statements the way `apps/mobile/lib/sqlite-driver.ts` will, so outer-driver-in-tx misuse fails in tests, not just on device (`packages/local-db/src/__tests__/helpers.ts`).
+- Cover `ackOutbox`/`updateJournal`/`deleteJournal`/`setCompletionNote`/`listCompletions` filters with tests (`packages/local-db/src/__tests__/store.test.ts`).
+- Decide outbox growth while sync is Off: skip enqueueing while Off (since `claim` already re-queues everything on connect) or compact the outbox per `(tbl, id)` (`packages/local-db/src/store.ts` `write`/`enqueue`).
+- Chunk `claim`/`applyRemote` so a large local dataset doesn't stall UI reads (`packages/local-db/src/store.ts` `claim`, `sync.applyRemote`).
+
 **Files:**
 - Create: `packages/sync/src/engine.ts`
 - Modify: `packages/sync/src/index.ts`
@@ -2772,6 +2781,13 @@ git commit -m "feat(sync): add push-then-pull sync engine with cursor paging"
 ```
 
 ### Task 11: Mobile sync settings, remote factory and sync service
+
+**Carry-over from M1 review:**
+- Query keys must include `userId`, or `queryClient.clear()` on user switch — otherwise a new sign-in can render the previous user's cached habits/completions/streaks (`apps/mobile/hooks/use-habits.ts`, `use-completions.ts`, `use-streaks.ts`, `apps/mobile/providers/query-provider.tsx`).
+- `claim(currentId)` must early-return inside the store instead of destructively re-pointing a user's own rows to themselves (`packages/local-db/src/store.ts` `claim`).
+- `auth-provider` must not show the previous user id while a new sign-in/claim is in flight (`apps/mobile/providers/auth-provider.tsx`).
+- A `refreshUserId` failure should not replace the whole tree with the error screen (`apps/mobile/providers/local-provider.tsx`).
+- Import must keep the local profile's email rather than overwriting it from the imported backup (`packages/local-db/src/store.ts` `importBackup`).
 
 **Files:**
 - Create: `apps/mobile/lib/sync/config.ts`, `lib/sync/remote-factory.ts`, `lib/sync/service.ts`, `hooks/use-sync.ts`, `app/sync-settings.tsx`
@@ -3711,6 +3727,9 @@ git commit -m "feat(selfhost): build web without Supabase env and add docker com
 ## M4 — Supabase as an optional sync backend
 
 ### Task 14: Supabase migration 007 + web client soft deletes
+
+**Carry-over from M1 review:**
+- Normalize completion ids to `completionId(habit_id, completed_date)` on import, once web/Supabase exports exist and can hand back ids that don't already follow that scheme (`packages/local-db/src/backup.ts`, `packages/local-db/src/store.ts` `importBackup`).
 
 **Files:**
 - Create: `supabase/migrations/007_sync.sql`
