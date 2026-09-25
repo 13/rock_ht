@@ -22,18 +22,26 @@ export interface Palette {
   primary: string;
   onPrimary: string;
   danger: string;
+  /** Softer danger accent, used where the full-strength `danger` reads too harsh (e.g. Delete button text) */
+  dangerSoft: string;
+  /** Danger tint for borders/backgrounds (same in every theme) */
+  dangerBorder: string;
   warning: string;
   streak: string;
   success: string;
   /** Stats insight accents (same in every theme) */
   insightStrength: string;
   insightMilestone: string;
+  /** `Switch` off-track color; overridable per palette */
+  switchTrackOff: string;
   statusBar: "light" | "dark";
 }
 
 const shared = {
   onPrimary: "#ffffff",
   danger: "#ef4444",
+  dangerSoft: "#f87171",
+  dangerBorder: "#7f1d1d40",
   warning: "#f59e0b",
   streak: "#f97316",
   success: "#22c55e",
@@ -54,6 +62,7 @@ export const PALETTES: Record<ThemeName, Palette> = {
     primary: "#6366f1",
     statusBar: "light",
     ...shared,
+    switchTrackOff: "#2d2d3a",
   },
   light: {
     background: "#fafafa",
@@ -67,6 +76,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     primary: "#5048e5",
     statusBar: "dark",
     ...shared,
+    warning: "#b45309",
+    switchTrackOff: "#a1a1aa",
   },
   midnight: {
     background: "#000000",
@@ -80,6 +91,7 @@ export const PALETTES: Record<ThemeName, Palette> = {
     primary: "#9b6af1",
     statusBar: "light",
     ...shared,
+    switchTrackOff: "#2a2a2f",
   },
   forest: {
     background: "#0a100d",
@@ -93,6 +105,7 @@ export const PALETTES: Record<ThemeName, Palette> = {
     primary: "#21c45d",
     statusBar: "light",
     ...shared,
+    switchTrackOff: "#2b3a32",
   },
   sunset: {
     background: "#110b09",
@@ -106,5 +119,6 @@ export const PALETTES: Record<ThemeName, Palette> = {
     primary: "#ec417a",
     statusBar: "light",
     ...shared,
+    switchTrackOff: "#3a2d27",
   },
 };

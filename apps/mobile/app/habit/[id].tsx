@@ -414,11 +414,11 @@ export default function HabitDetailScreen() {
               paddingVertical: 13,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: colors.danger + "20",
+              borderColor: colors.dangerBorder,
               alignItems: "center",
             }}
           >
-            <Text style={{ color: colors.danger, fontSize: 14, fontWeight: "500" }}>
+            <Text style={{ color: colors.dangerSoft, fontSize: 14, fontWeight: "500" }}>
               Delete habit
             </Text>
           </TouchableOpacity>

@@ -370,7 +370,7 @@ export default function SettingsScreen() {
               <Switch
                 value={notifEnabled}
                 onValueChange={handleNotificationsToggle}
-                trackColor={{ false: colors.elevated, true: colors.primary }}
+                trackColor={{ false: colors.switchTrackOff, true: colors.primary }}
                 thumbColor={colors.onPrimary}
                 disabled={isLoading}
               />
