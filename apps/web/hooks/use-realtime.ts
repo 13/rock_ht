@@ -27,7 +27,7 @@ export function useRealtimeSync() {
 
     const db = supabase as unknown as TypedSupabaseClient;
 
-    const habitsChannel = subscribeToHabits(db, user.id, ({ eventType }) => {
+    const habitsChannel = subscribeToHabits(db, user.id, () => {
       // Don't refetch on our own optimistic mutations (handled by mutation callbacks)
       // But DO refetch on changes from other devices
       queryClient.invalidateQueries({ queryKey: ["habits"] });

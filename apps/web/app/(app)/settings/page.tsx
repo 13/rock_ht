@@ -7,7 +7,6 @@ import { useSubscription } from "@/hooks/use-subscription";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-import { useHabits } from "@/hooks/use-habits";
 import { useProfile } from "@/hooks/use-profile";
 import { useWebNotifications } from "@/hooks/use-web-notifications";
 import { cn } from "@/lib/utils";
@@ -45,7 +44,6 @@ function asDbClient(c: unknown): TypedSupabaseClient {
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
-  const { habits } = useHabits();
   const { profile, updateProfile, isUpdating } = useProfile();
   const { permission, supported, requestPermission } = useWebNotifications();
   const [exporting, setExporting] = useState(false);

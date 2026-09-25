@@ -1,4 +1,3 @@
-import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStreakEmoji } from "@rock_ht/utils";
 

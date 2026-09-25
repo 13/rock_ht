@@ -3,7 +3,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { hexToHsl } from "@/lib/utils";
 
 interface CompletionButtonProps {
   completed: boolean;

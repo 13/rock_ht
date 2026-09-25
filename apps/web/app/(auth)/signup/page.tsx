@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,7 +20,6 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function SignupPage() {
-  const router = useRouter();
   const { supabase } = useSupabase();
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);

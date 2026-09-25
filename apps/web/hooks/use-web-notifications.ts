@@ -20,7 +20,7 @@ export function useWebNotifications() {
     return result === "granted";
   }
 
-  function show(title: string, body: string, icon?: string): void {
+  function show(title: string, body: string): void {
     if (permission !== "granted" || !supported) return;
     new Notification(title, { body, icon: "/icons/icon-192.png", silent: false });
   }

@@ -9,7 +9,6 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarHeatmap } from "@/components/analytics/calendar-heatmap";
 import { DayOfWeekChart } from "@/components/analytics/day-of-week-chart";
-import { StreakBadge } from "@/components/habits/streak-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useHabits } from "@/hooks/use-habits";
@@ -27,9 +26,7 @@ import {
   formatFrequencyLabel,
   formatRelativeDay,
 } from "@rock_ht/utils";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { format, parseISO } from "date-fns";
 import type { JournalEntry } from "@rock_ht/types";
 
 export default function HabitDetailPage({
