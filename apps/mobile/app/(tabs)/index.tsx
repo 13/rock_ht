@@ -23,8 +23,10 @@ import {
 } from "@rock_ht/utils";
 import type { StreakRow } from "@rock_ht/types";
 import { useRouter } from "expo-router";
+import { useTheme } from "@/theme/theme-provider";
 
 export default function TodayScreen() {
+  const { colors } = useTheme();
   const { habits, isLoading: habitsLoading, deleteHabit } = useHabits();
   const {
     completedTodayIds,
@@ -67,7 +69,7 @@ export default function TodayScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -75,20 +77,20 @@ export default function TodayScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
       >
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-          <Text style={{ fontSize: 13, color: "#6b6b80", marginBottom: 2 }}>
+          <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 2 }}>
             {new Date().toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",
               day: "numeric",
             })}
           </Text>
-          <Text style={{ fontSize: 26, fontWeight: "700", color: "#f4f4f8" }}>
+          <Text style={{ fontSize: 26, fontWeight: "700", color: colors.foreground }}>
             Good {getGreeting()}
           </Text>
         </View>
@@ -98,10 +100,10 @@ export default function TodayScreen() {
           style={{
             margin: 20,
             padding: 20,
-            backgroundColor: "#111118",
+            backgroundColor: colors.card,
             borderRadius: 24,
             borderWidth: 1,
-            borderColor: "#1e1e2a",
+            borderColor: colors.border,
             flexDirection: "row",
             alignItems: "center",
             gap: 20,
@@ -113,10 +115,10 @@ export default function TodayScreen() {
             size={100}
           />
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 18, fontWeight: "600", color: "#f4f4f8" }}>
+            <Text style={{ fontSize: 18, fontWeight: "600", color: colors.foreground }}>
               {getMotivationalMessage(completed, total)}
             </Text>
-            <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 4 }}>
+            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
               {completed} of {total} habits done
             </Text>
           </View>
@@ -128,7 +130,7 @@ export default function TodayScreen() {
             style={{
               fontSize: 11,
               fontWeight: "600",
-              color: "#6b6b80",
+              color: colors.textMuted,
               textTransform: "uppercase",
               letterSpacing: 0.8,
               marginBottom: 12,
@@ -144,7 +146,7 @@ export default function TodayScreen() {
                   key={i}
                   style={{
                     height: 72,
-                    backgroundColor: "#111118",
+                    backgroundColor: colors.card,
                     borderRadius: 16,
                     opacity: 0.6 - i * 0.1,
                   }}
@@ -154,10 +156,10 @@ export default function TodayScreen() {
           ) : todayHabits.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 48 }}>
               <Text style={{ fontSize: 36, marginBottom: 12 }}>✨</Text>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
                 No habits for today
               </Text>
-              <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 4 }}>
+              <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
                 Go to Habits tab to add some
               </Text>
             </View>
@@ -188,7 +190,7 @@ export default function TodayScreen() {
                 style={{
                   fontSize: 11,
                   fontWeight: "600",
-                  color: "#6b6b80",
+                  color: colors.textMuted,
                   textTransform: "uppercase",
                   letterSpacing: 0.8,
                 }}
@@ -197,18 +199,18 @@ export default function TodayScreen() {
               </Text>
               <View
                 style={{
-                  backgroundColor: "rgba(245,158,11,0.1)",
+                  backgroundColor: colors.warning + "1a",
                   borderRadius: 12,
                   paddingHorizontal: 8,
                   paddingVertical: 2,
                 }}
               >
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#f59e0b" }}>
+                <Text style={{ fontSize: 10, fontWeight: "600", color: colors.warning }}>
                   Grace recovery
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 12, color: "#6b6b80", marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 10 }}>
               Missed these? Log now to save your streaks.
             </Text>
             <View style={{ gap: 8 }}>
@@ -219,10 +221,10 @@ export default function TodayScreen() {
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 12,
-                    backgroundColor: "#111118",
+                    backgroundColor: colors.card,
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: "#1e1e2a",
+                    borderColor: colors.border,
                     borderStyle: "dashed",
                     padding: 14,
                   }}
@@ -241,7 +243,7 @@ export default function TodayScreen() {
                   />
                   <Text style={{ fontSize: 20 }}>{habit.icon}</Text>
                   <Text
-                    style={{ flex: 1, fontSize: 14, color: "#9999aa", fontWeight: "500" }}
+                    style={{ flex: 1, fontSize: 14, color: colors.textSecondary, fontWeight: "500" }}
                     numberOfLines={1}
                   >
                     {habit.title}
@@ -250,14 +252,14 @@ export default function TodayScreen() {
                     onPress={() => logYesterday(habit.id)}
                     disabled={isLoggingYesterday}
                     style={{
-                      backgroundColor: "rgba(245,158,11,0.1)",
+                      backgroundColor: colors.warning + "1a",
                       borderRadius: 10,
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       opacity: isLoggingYesterday ? 0.5 : 1,
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#f59e0b" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.warning }}>
                       Log yesterday
                     </Text>
                   </TouchableOpacity>

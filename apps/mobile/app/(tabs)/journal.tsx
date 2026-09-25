@@ -15,6 +15,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { hapticMedium, hapticSuccess, hapticLight } from "@/lib/haptics";
 import { MOOD_EMOJIS, MOOD_LABELS } from "@rock_ht/types";
 import type { CreateJournalEntryInput, JournalEntry } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 const MOODS = [1, 2, 3, 4, 5] as const;
 
@@ -25,6 +26,7 @@ function MoodPicker({
   selected: number | null;
   onChange: (mood: number | null) => void;
 }) {
+  const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
       {MOODS.map((m) => (
@@ -40,15 +42,15 @@ function MoodPicker({
             paddingVertical: 10,
             borderRadius: 12,
             borderWidth: 1.5,
-            borderColor: selected === m ? "#6366f1" : "#2d2d3a",
-            backgroundColor: selected === m ? "#6366f115" : "transparent",
+            borderColor: selected === m ? colors.primary : colors.elevated,
+            backgroundColor: selected === m ? colors.primary + "15" : "transparent",
           }}
         >
           <Text style={{ fontSize: 20 }}>{MOOD_EMOJIS[m]}</Text>
           <Text
             style={{
               fontSize: 10,
-              color: selected === m ? "#6366f1" : "#6b7280",
+              color: selected === m ? colors.primary : colors.textMuted,
               marginTop: 3,
               fontWeight: "500",
             }}
@@ -72,6 +74,7 @@ function EntryEditor({
   onCancel: () => void;
   isLoading: boolean;
 }) {
+  const { colors } = useTheme();
   const [content, setContent] = useState(initial?.content ?? "");
   const [mood, setMood] = useState<number | null>(initial?.mood ?? null);
 
@@ -88,19 +91,19 @@ function EntryEditor({
         value={content}
         onChangeText={setContent}
         placeholder="Write about your day, your progress, or anything on your mind..."
-        placeholderTextColor="#4b5563"
+        placeholderTextColor={colors.textMuted}
         multiline
         numberOfLines={6}
         textAlignVertical="top"
         style={{
-          backgroundColor: "#111118",
-          color: "#f4f4f8",
+          backgroundColor: colors.card,
+          color: colors.foreground,
           borderRadius: 12,
           padding: 14,
           fontSize: 15,
           lineHeight: 22,
           borderWidth: 1,
-          borderColor: "#2d2d3a",
+          borderColor: colors.elevated,
           minHeight: 130,
           marginBottom: 16,
         }}
@@ -115,11 +118,11 @@ function EntryEditor({
             paddingVertical: 13,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: "#2d2d3a",
+            borderColor: colors.elevated,
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "#9ca3af", fontWeight: "600" }}>Cancel</Text>
+          <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={submit}
@@ -128,15 +131,15 @@ function EntryEditor({
             flex: 1,
             paddingVertical: 13,
             borderRadius: 12,
-            backgroundColor: content.trim() ? "#6366f1" : "#2d2d3a",
+            backgroundColor: content.trim() ? colors.primary : colors.elevated,
             alignItems: "center",
             opacity: isLoading ? 0.7 : 1,
           }}
         >
           {isLoading ? (
-            <ActivityIndicator color="white" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
-            <Text style={{ color: "white", fontWeight: "600" }}>
+            <Text style={{ color: content.trim() ? colors.onPrimary : colors.foreground, fontWeight: "600" }}>
               {initial ? "Update" : "Save"}
             </Text>
           )}
@@ -155,6 +158,7 @@ function EntryCard({
   onEdit: (e: JournalEntry) => void;
   onDelete: (id: string) => void;
 }) {
+  const { colors } = useTheme();
   const formattedDate = format(parseISO(entry.entry_date), "EEE, MMM d");
   const moodEmoji = entry.mood ? MOOD_EMOJIS[entry.mood] : null;
 
@@ -174,11 +178,11 @@ function EntryCard({
       }}
       activeOpacity={0.85}
       style={{
-        backgroundColor: "#111118",
+        backgroundColor: colors.card,
         borderRadius: 16,
         padding: 16,
         borderWidth: 1,
-        borderColor: "#1e1e2a",
+        borderColor: colors.border,
         marginBottom: 10,
       }}
     >
@@ -190,7 +194,7 @@ function EntryCard({
           marginBottom: 8,
         }}
       >
-        <Text style={{ fontSize: 12, color: "#6b7280", fontWeight: "500" }}>
+        <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: "500" }}>
           {formattedDate}
         </Text>
         {moodEmoji && (
@@ -200,7 +204,7 @@ function EntryCard({
       <Text
         style={{
           fontSize: 14,
-          color: "#d1d5db",
+          color: colors.foreground,
           lineHeight: 20,
         }}
         numberOfLines={3}
@@ -212,6 +216,7 @@ function EntryCard({
 }
 
 export default function JournalScreen() {
+  const { colors } = useTheme();
   const { entries, isLoading, createEntry, updateEntry, deleteEntry, isCreating, isUpdating } =
     useJournal();
 
@@ -255,7 +260,7 @@ export default function JournalScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       {/* Header */}
       <View
         style={{
@@ -266,7 +271,7 @@ export default function JournalScreen() {
           paddingVertical: 16,
         }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", color: "#f4f4f8" }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", color: colors.foreground }}>
           Journal
         </Text>
         <TouchableOpacity
@@ -278,12 +283,12 @@ export default function JournalScreen() {
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: "#6366f120",
+            backgroundColor: colors.primary + "20",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#6366f1", fontSize: 22, lineHeight: 26 }}>+</Text>
+          <Text style={{ color: colors.primary, fontSize: 22, lineHeight: 26 }}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -294,7 +299,7 @@ export default function JournalScreen() {
               key={i}
               style={{
                 height: 90,
-                backgroundColor: "#111118",
+                backgroundColor: colors.card,
                 borderRadius: 16,
                 opacity: 0.6 - i * 0.1,
               }}
@@ -304,10 +309,10 @@ export default function JournalScreen() {
       ) : entries.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 80 }}>
           <Text style={{ fontSize: 48, marginBottom: 16 }}>📔</Text>
-          <Text style={{ fontSize: 18, fontWeight: "600", color: "#f4f4f8", marginBottom: 8 }}>
+          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.foreground, marginBottom: 8 }}>
             Your journal is empty
           </Text>
-          <Text style={{ fontSize: 14, color: "#6b7280", marginBottom: 24, textAlign: "center", paddingHorizontal: 40 }}>
+          <Text style={{ fontSize: 14, color: colors.textMuted, marginBottom: 24, textAlign: "center", paddingHorizontal: 40 }}>
             Reflect on your progress and track how you feel each day.
           </Text>
           <TouchableOpacity
@@ -316,13 +321,13 @@ export default function JournalScreen() {
               setShowCreate(true);
             }}
             style={{
-              backgroundColor: "#6366f1",
+              backgroundColor: colors.primary,
               paddingHorizontal: 24,
               paddingVertical: 12,
               borderRadius: 24,
             }}
           >
-            <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
+            <Text style={{ color: colors.onPrimary, fontWeight: "600", fontSize: 15 }}>
               Write first entry
             </Text>
           </TouchableOpacity>
@@ -338,7 +343,7 @@ export default function JournalScreen() {
                 style={{
                   fontSize: 11,
                   fontWeight: "600",
-                  color: "#6b7280",
+                  color: colors.textMuted,
                   textTransform: "uppercase",
                   letterSpacing: 0.8,
                   marginBottom: 10,
@@ -373,17 +378,17 @@ export default function JournalScreen() {
             width: 52,
             height: 52,
             borderRadius: 26,
-            backgroundColor: "#6366f1",
+            backgroundColor: colors.primary,
             alignItems: "center",
             justifyContent: "center",
-            shadowColor: "#6366f1",
+            shadowColor: colors.primary,
             shadowOpacity: 0.5,
             shadowRadius: 10,
             shadowOffset: { width: 0, height: 4 },
             elevation: 8,
           }}
         >
-          <Text style={{ color: "white", fontSize: 26, lineHeight: 30 }}>+</Text>
+          <Text style={{ color: colors.onPrimary, fontSize: 26, lineHeight: 30 }}>+</Text>
         </TouchableOpacity>
       )}
 

@@ -39,6 +39,7 @@ function SettingRow({
   destructive,
   rightElement,
 }: SettingRowProps) {
+  const { colors } = useTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -56,7 +57,7 @@ function SettingRow({
           width: 32,
           height: 32,
           borderRadius: 8,
-          backgroundColor: destructive ? "#ef444420" : "#6366f120",
+          backgroundColor: destructive ? colors.danger + "20" : colors.primary + "20",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -64,14 +65,14 @@ function SettingRow({
         <Ionicons
           name={icon}
           size={17}
-          color={destructive ? "#ef4444" : "#6366f1"}
+          color={destructive ? colors.danger : colors.primary}
         />
       </View>
       <Text
         style={{
           flex: 1,
           fontSize: 15,
-          color: destructive ? "#ef4444" : "#f4f4f8",
+          color: destructive ? colors.danger : colors.foreground,
           fontWeight: "500",
         }}
       >
@@ -80,10 +81,10 @@ function SettingRow({
       {rightElement ?? (
         <>
           {value && (
-            <Text style={{ fontSize: 13, color: "#6b7280" }}>{value}</Text>
+            <Text style={{ fontSize: 13, color: colors.textMuted }}>{value}</Text>
           )}
           {!destructive && onPress && (
-            <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           )}
         </>
       )}
@@ -92,12 +93,13 @@ function SettingRow({
 }
 
 function SectionHeader({ title }: { title: string }) {
+  const { colors } = useTheme();
   return (
     <Text
       style={{
         fontSize: 11,
         fontWeight: "600",
-        color: "#6b7280",
+        color: colors.textMuted,
         textTransform: "uppercase",
         letterSpacing: 0.8,
         paddingHorizontal: 20,
@@ -111,14 +113,15 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function SectionCard({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
   return (
     <View
       style={{
         marginHorizontal: 20,
-        backgroundColor: "#111118",
+        backgroundColor: colors.card,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: "#1e1e2a",
+        borderColor: colors.border,
         overflow: "hidden",
       }}
     >
@@ -128,9 +131,10 @@ function SectionCard({ children }: { children: React.ReactNode }) {
 }
 
 function Divider() {
+  const { colors } = useTheme();
   return (
     <View
-      style={{ height: 1, backgroundColor: "#1e1e2a", marginLeft: 60 }}
+      style={{ height: 1, backgroundColor: colors.border, marginLeft: 60 }}
     />
   );
 }
@@ -188,7 +192,7 @@ export default function SettingsScreen() {
     useNotifications();
   const [notifEnabled, setNotifEnabled] = useState(false);
   const queryClient = useQueryClient();
-  const { name: activeTheme, setTheme } = useTheme();
+  const { name: activeTheme, colors, setTheme } = useTheme();
 
   async function handleThemeChange(next: ThemeName) {
     hapticLight();
@@ -272,7 +276,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#0a0a0f" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top"]}
     >
       <View
@@ -282,7 +286,7 @@ export default function SettingsScreen() {
           paddingBottom: 8,
         }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", color: "#f4f4f8" }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", color: colors.foreground }}>
           Settings
         </Text>
       </View>
@@ -301,7 +305,7 @@ export default function SettingsScreen() {
               gap: 12,
               padding: 16,
               borderBottomWidth: 1,
-              borderBottomColor: "#1e1e2a",
+              borderBottomColor: colors.border,
             }}
           >
             <View
@@ -309,25 +313,25 @@ export default function SettingsScreen() {
                 width: 40,
                 height: 40,
                 borderRadius: 20,
-                backgroundColor: "#6366f120",
+                backgroundColor: colors.primary + "20",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               <Text
-                style={{ fontSize: 16, fontWeight: "700", color: "#6366f1" }}
+                style={{ fontSize: 16, fontWeight: "700", color: colors.primary }}
               >
                 {user?.email?.[0]?.toUpperCase() ?? "U"}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text
-                style={{ fontSize: 14, fontWeight: "600", color: "#f4f4f8" }}
+                style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}
                 numberOfLines={1}
               >
                 {user.email ?? "Local profile"}
               </Text>
-              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
                 {user.email
                   ? `Member since ${new Date(user.created_at).getFullYear()}`
                   : "Stored on this device"}
@@ -366,8 +370,8 @@ export default function SettingsScreen() {
               <Switch
                 value={notifEnabled}
                 onValueChange={handleNotificationsToggle}
-                trackColor={{ false: "#2d2d3a", true: "#6366f1" }}
-                thumbColor="white"
+                trackColor={{ false: colors.elevated, true: colors.primary }}
+                thumbColor={colors.onPrimary}
                 disabled={isLoading}
               />
             }
@@ -417,13 +421,13 @@ export default function SettingsScreen() {
                 paddingVertical: 14,
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: "#ef444440",
-                backgroundColor: "#ef444410",
+                borderColor: colors.danger + "40",
+                backgroundColor: colors.danger + "10",
               }}
             >
-              <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
               <Text
-                style={{ fontSize: 15, fontWeight: "600", color: "#ef4444" }}
+                style={{ fontSize: 15, fontWeight: "600", color: colors.danger }}
               >
                 Sign out
               </Text>
@@ -434,7 +438,7 @@ export default function SettingsScreen() {
         <Text
           style={{
             textAlign: "center",
-            color: "#6b7280",
+            color: colors.textMuted,
             fontSize: 12,
             marginTop: 24,
           }}

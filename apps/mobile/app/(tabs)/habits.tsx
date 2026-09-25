@@ -17,8 +17,10 @@ import { useStreaks } from "@/hooks/use-streaks";
 import { useToday } from "@/hooks/use-today";
 import { hapticMedium } from "@/lib/haptics";
 import type { CreateHabitInput, HabitWithFrequency, StreakRow } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 export default function HabitsScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
   const { habits, isLoading, createHabit, updateHabit, archiveHabit, deleteHabit, isCreating } = useHabits();
   const { completedTodayIds, toggleCompletion } = useCompletions();
@@ -62,7 +64,7 @@ export default function HabitsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       {/* Header */}
       <View
         style={{
@@ -73,10 +75,10 @@ export default function HabitsScreen() {
           paddingVertical: 16,
         }}
       >
-        <Text style={{ fontSize: 26, fontWeight: "700", color: "#f4f4f8" }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", color: colors.foreground }}>
           Habits
         </Text>
-        <Text style={{ fontSize: 13, color: "#6b6b80" }}>
+        <Text style={{ fontSize: 13, color: colors.textMuted }}>
           {activeHabits.length} active
         </Text>
       </View>
@@ -92,7 +94,7 @@ export default function HabitsScreen() {
                 key={i}
                 style={{
                   height: 72,
-                  backgroundColor: "#111118",
+                  backgroundColor: colors.card,
                   borderRadius: 16,
                   opacity: 0.6,
                 }}
@@ -102,10 +104,10 @@ export default function HabitsScreen() {
         ) : activeHabits.length === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: 64 }}>
             <Text style={{ fontSize: 36, marginBottom: 12 }}>🌱</Text>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#f4f4f8" }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
               No habits yet
             </Text>
-            <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 4, marginBottom: 24 }}>
+            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: 24 }}>
               Start building your routine
             </Text>
             <TouchableOpacity
@@ -114,13 +116,13 @@ export default function HabitsScreen() {
                 setShowCreateSheet(true);
               }}
               style={{
-                backgroundColor: "#6366f1",
+                backgroundColor: colors.primary,
                 paddingHorizontal: 24,
                 paddingVertical: 12,
                 borderRadius: 24,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
+              <Text style={{ color: colors.onPrimary, fontWeight: "600", fontSize: 15 }}>
                 Create first habit
               </Text>
             </TouchableOpacity>
@@ -157,17 +159,17 @@ export default function HabitsScreen() {
           width: 56,
           height: 56,
           borderRadius: 28,
-          backgroundColor: "#6366f1",
+          backgroundColor: colors.primary,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#6366f1",
+          shadowColor: colors.primary,
           shadowOpacity: 0.5,
           shadowRadius: 12,
           shadowOffset: { width: 0, height: 4 },
           elevation: 8,
         }}
       >
-        <Text style={{ color: "white", fontSize: 28, lineHeight: 32 }}>+</Text>
+        <Text style={{ color: colors.onPrimary, fontSize: 28, lineHeight: 32 }}>+</Text>
       </TouchableOpacity>
 
       {/* Create Sheet */}

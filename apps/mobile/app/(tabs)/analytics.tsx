@@ -14,6 +14,7 @@ import {
   RARITY_COLORS,
   today,
 } from "@rock_ht/utils";
+import { useTheme } from "@/theme/theme-provider";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CELL_SIZE = 10;
@@ -29,6 +30,7 @@ function MiniHeatmap({
   habitId: string;
   completions: { habit_id: string; completed_date: string; value: number }[];
 }) {
+  const { colors } = useTheme();
   const data = buildCompletionHeatmap(
     completions.filter((c) => c.habit_id === habitId),
     WEEKS * 7
@@ -54,7 +56,7 @@ function MiniHeatmap({
                 width: CELL_SIZE,
                 height: CELL_SIZE,
                 borderRadius: 2,
-                backgroundColor: day.completed ? color : "#1e1e2a",
+                backgroundColor: day.completed ? color : colors.border,
                 opacity: day.date > todayStr ? 0 : day.completed ? 1 : 0.4,
               }}
             />
@@ -66,6 +68,7 @@ function MiniHeatmap({
 }
 
 export default function AnalyticsScreen() {
+  const { colors } = useTheme();
   const { habits } = useHabits();
   const { monthCompletions } = useCompletions();
 
@@ -84,12 +87,12 @@ export default function AnalyticsScreen() {
   const maxHourCount = Math.max(...hourData.map((h) => h.count), 1);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 26, fontWeight: "700", color: "#f4f4f8" }}>
+        <Text style={{ fontSize: 26, fontWeight: "700", color: colors.foreground }}>
           Analytics
         </Text>
-        <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 2 }}>
+        <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
           13-week overview
         </Text>
       </View>
@@ -102,10 +105,10 @@ export default function AnalyticsScreen() {
         {activeHabits.length > 0 && (
           <View
             style={{
-              backgroundColor: "#111118",
+              backgroundColor: colors.card,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: "#1e1e2a",
+              borderColor: colors.border,
               padding: 16,
               flexDirection: "row",
               alignItems: "center",
@@ -118,26 +121,26 @@ export default function AnalyticsScreen() {
                 width={72} height={72}
                 style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
               >
-                <Circle cx={36} cy={36} r={28} fill="none" stroke="#1e1e2a" strokeWidth={6} />
+                <Circle cx={36} cy={36} r={28} fill="none" stroke={colors.border} strokeWidth={6} />
                 <Circle
                   cx={36} cy={36} r={28} fill="none"
-                  stroke="#6366f1" strokeWidth={6}
+                  stroke={colors.primary} strokeWidth={6}
                   strokeLinecap="round"
                   strokeDasharray={`${2 * Math.PI * 28} ${2 * Math.PI * 28}`}
                   strokeDashoffset={2 * Math.PI * 28 - (score / 100) * 2 * Math.PI * 28}
                 />
               </Svg>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#f4f4f8" }}>{score}</Text>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }}>{score}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, color: "#6b6b80", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
                 Weekly Consistency
               </Text>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>
                 {score >= 90 ? "Excellent" : score >= 75 ? "Great" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Starting out"}
               </Text>
-              <View style={{ height: 4, backgroundColor: "#1e1e2a", borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
-                <View style={{ height: "100%", width: `${score}%`, backgroundColor: "#6366f1", borderRadius: 2 }} />
+              <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 6, overflow: "hidden" }}>
+                <View style={{ height: "100%", width: `${score}%`, backgroundColor: colors.primary, borderRadius: 2 }} />
               </View>
             </View>
           </View>
@@ -147,14 +150,14 @@ export default function AnalyticsScreen() {
         {unlockedAchievements.length > 0 && (
           <View
             style={{
-              backgroundColor: "#111118",
+              backgroundColor: colors.card,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: "#1e1e2a",
+              borderColor: colors.border,
               padding: 16,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "#6b6b80", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>
               Achievements · {unlockedAchievements.length}/{achievements.length}
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -186,23 +189,23 @@ export default function AnalyticsScreen() {
         {insights.length > 0 && (
           <View
             style={{
-              backgroundColor: "#111118",
+              backgroundColor: colors.card,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: "#1e1e2a",
+              borderColor: colors.border,
               padding: 16,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "#6b6b80", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>
               Insights
             </Text>
             <View style={{ gap: 10 }}>
               {insights.slice(0, 4).map((insight) => {
                 const borderColor =
-                  insight.type === "strength" ? "#10b981"
-                  : insight.type === "warning" ? "#f59e0b"
+                  insight.type === "strength" ? colors.success
+                  : insight.type === "warning" ? colors.warning
                   : insight.type === "milestone" ? "#8b5cf6"
-                  : "#6366f1";
+                  : colors.primary;
                 return (
                   <View
                     key={insight.id}
@@ -216,10 +219,10 @@ export default function AnalyticsScreen() {
                   >
                     <Text style={{ fontSize: 18, lineHeight: 22 }}>{insight.emoji}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#f4f4f8", marginBottom: 2 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 2 }}>
                         {insight.title}
                       </Text>
-                      <Text style={{ fontSize: 12, color: "#6b6b80", lineHeight: 17 }}>
+                      <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 17 }}>
                         {insight.body}
                       </Text>
                     </View>
@@ -234,14 +237,14 @@ export default function AnalyticsScreen() {
         {monthCompletions.length >= 5 && (
           <View
             style={{
-              backgroundColor: "#111118",
+              backgroundColor: colors.card,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: "#1e1e2a",
+              borderColor: colors.border,
               padding: 16,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "#6b6b80", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 12 }}>
               When you complete habits
             </Text>
             <View style={{ flexDirection: "row", alignItems: "flex-end", height: 48, gap: 2 }}>
@@ -255,7 +258,7 @@ export default function AnalyticsScreen() {
                       flex: 1,
                       height: Math.max(heightPct * 48, d.count > 0 ? 3 : 1),
                       borderRadius: 2,
-                      backgroundColor: isPeak ? "#6366f1" : "#6366f140",
+                      backgroundColor: isPeak ? colors.primary : colors.primary + "40",
                     }}
                   />
                 );
@@ -263,7 +266,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
               {[0, 6, 12, 18, 23].map((h) => (
-                <Text key={h} style={{ fontSize: 9, color: "#6b6b80" }}>
+                <Text key={h} style={{ fontSize: 9, color: colors.textMuted }}>
                   {h === 0 ? "12am" : h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`}
                 </Text>
               ))}
@@ -274,10 +277,10 @@ export default function AnalyticsScreen() {
         {activeHabits.length === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: 64 }}>
             <Text style={{ fontSize: 36, marginBottom: 12 }}>📊</Text>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#f4f4f8" }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
               No data yet
             </Text>
-            <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 4 }}>
+            <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
               Start tracking habits to see stats here
             </Text>
           </View>
@@ -293,10 +296,10 @@ export default function AnalyticsScreen() {
               <View
                 key={habit.id}
                 style={{
-                  backgroundColor: "#111118",
+                  backgroundColor: colors.card,
                   borderRadius: 20,
                   borderWidth: 1,
-                  borderColor: "#1e1e2a",
+                  borderColor: colors.border,
                   padding: 16,
                 }}
               >
@@ -313,12 +316,12 @@ export default function AnalyticsScreen() {
                     <Text style={{ fontSize: 20 }}>{habit.icon}</Text>
                     <View>
                       <Text
-                        style={{ fontSize: 15, fontWeight: "600", color: "#f4f4f8" }}
+                        style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}
                         numberOfLines={1}
                       >
                         {habit.title}
                       </Text>
-                      <Text style={{ fontSize: 12, color: "#6b6b80" }}>
+                      <Text style={{ fontSize: 12, color: colors.textMuted }}>
                         {rate}% last 30 days
                       </Text>
                     </View>
@@ -329,7 +332,7 @@ export default function AnalyticsScreen() {
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 4,
-                        backgroundColor: "#f9741620",
+                        backgroundColor: colors.streak + "20",
                         paddingHorizontal: 8,
                         paddingVertical: 4,
                         borderRadius: 10,
@@ -340,7 +343,7 @@ export default function AnalyticsScreen() {
                         style={{
                           fontSize: 13,
                           fontWeight: "700",
-                          color: "#f97316",
+                          color: colors.streak,
                         }}
                       >
                         {streak.current_streak}
