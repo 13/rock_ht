@@ -5,8 +5,14 @@ set -euo pipefail
 SCRIPT="$(builtin cd "$(dirname "$0")" && pwd)/apk-version.sh"
 fails=0
 
+# All throwaway repos live under one parent dir so a single trap cleans up
+# everything, including repos created inside mkrepo's command-substitution
+# subshell (whose own EXIT trap, if any, would not reach the caller's shell).
+PARENT="$(mktemp -d)"
+trap 'rm -rf "$PARENT"' EXIT
+
 mkrepo() {  # mkrepo <app.json version> <commit count>
-    local dir; dir="$(mktemp -d)"
+    local dir; dir="$(mktemp -d -p "$PARENT")"
     git -C "$dir" init -q
     git -C "$dir" config user.email t@t
     git -C "$dir" config user.name t
@@ -39,6 +45,14 @@ expect "tag disagreeing with app.json fails" "<exit 1>" "$r"
 
 r="$(mkrepo 0.2.0 2)"; git -C "$r" tag v0.2
 expect "non-semver tag fails" "<exit 1>" "$r"
+
+r="$(mkrepo 0.2.0 3)"
+r2="$(mktemp -d -p "$PARENT")"
+git clone -q --depth 1 "file://$r" "$r2"
+expect "shallow clone fails" "<exit 1>" "$r2"
+
+r="$(mkrepo 0.2.0 5)"; git -C "$r" tag v0.2.0-rc1; git -C "$r" tag v0.2.0
+expect "rc tag alongside exact tag on HEAD picks the exact tag" "0.2.0 5" "$r"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }
 echo "all passed"
