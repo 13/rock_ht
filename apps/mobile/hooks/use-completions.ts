@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocal } from "@/providers/local-provider";
-import { subtractDays, today, yesterday } from "@rock_ht/utils";
-import type { ToggleCompletionInput } from "@rock_ht/types";
+import { subtractDays } from "@rock_ht/utils";
+import { useToday } from "@/hooks/use-today";
+import type { CompletionRow, ToggleCompletionInput } from "@rock_ht/types";
 
 /** Keys include the local date: a new day is a new cache entry. */
 export const todayKey = (date: string) => ["completions", "today", date] as const;
@@ -12,9 +13,10 @@ export const monthKey = (date: string) => ["completions", "month", date] as cons
 export function useCompletions() {
   const { store, userId } = useLocal();
   const queryClient = useQueryClient();
-  // Local calendar dates (P0 fix c6c4195); never toISOString().slice(0, 10).
-  const todayStr = today();
-  const yesterdayStr = yesterday();
+  // Local calendar date, kept correct across midnight rollover (see use-today.ts); never
+  // today()/yesterday() computed once at render, and never toISOString().slice(0, 10).
+  const todayStr = useToday();
+  const yesterdayStr = subtractDays(todayStr, 1);
 
   const todayQuery = useQuery({
     queryKey: todayKey(todayStr),
@@ -36,8 +38,30 @@ export function useCompletions() {
   };
 
   const toggleMutation = useMutation({
-    mutationFn: (input: ToggleCompletionInput) =>
-      store.setCompletion(userId, input, !completedTodayIds.has(input.habit_id)),
+    mutationFn: (input: ToggleCompletionInput) => store.toggleCompletion(userId, input),
+    onMutate: async (input: ToggleCompletionInput) => {
+      const key = todayKey(todayStr);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<CompletionRow[]>(key);
+      queryClient.setQueryData<CompletionRow[]>(key, (old = []) => {
+        const alreadyDone = old.some((c) => c.habit_id === input.habit_id);
+        if (alreadyDone) return old.filter((c) => c.habit_id !== input.habit_id);
+        const optimistic: CompletionRow = {
+          id: `optimistic-${input.habit_id}-${input.date}`,
+          habit_id: input.habit_id,
+          user_id: userId,
+          completed_date: input.date,
+          value: input.value ?? 1,
+          note: input.note ?? null,
+          created_at: new Date().toISOString(),
+        };
+        return [...old, optimistic];
+      });
+      return { previous, key };
+    },
+    onError: (_err, _input, context) => {
+      if (context) queryClient.setQueryData(context.key, context.previous);
+    },
     onSettled: invalidate,
   });
 
@@ -46,11 +70,15 @@ export function useCompletions() {
     onSettled: invalidate,
   });
 
-  // React Native has no window-focus refetch; an app resumed from the background after
-  // midnight wouldn't otherwise re-render with the new day's query keys.
+  // React Native has no window-focus refetch; an app resumed from the background (possibly
+  // after local midnight) wouldn't otherwise re-render with the new day's query keys or
+  // recompute streaks.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
-      if (s === "active") queryClient.invalidateQueries({ queryKey: ["completions"] });
+      if (s === "active") {
+        queryClient.invalidateQueries({ queryKey: ["completions"] });
+        queryClient.invalidateQueries({ queryKey: ["streaks"] });
+      }
     });
     return () => sub.remove();
   }, [queryClient]);

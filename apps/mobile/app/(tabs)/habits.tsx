@@ -14,7 +14,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
 import { useStreaks } from "@/hooks/use-streaks";
-import { today } from "@rock_ht/utils";
+import { useToday } from "@/hooks/use-today";
 import { hapticMedium } from "@/lib/haptics";
 import type { CreateHabitInput, HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
@@ -22,7 +22,7 @@ export default function HabitsScreen() {
   const router = useRouter();
   const { habits, isLoading, createHabit, updateHabit, archiveHabit, deleteHabit, isCreating } = useHabits();
   const { completedTodayIds, toggleCompletion } = useCompletions();
-  const todayStr = today();
+  const todayStr = useToday();
 
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [editingHabit, setEditingHabit] = useState<HabitWithFrequency | null>(null);

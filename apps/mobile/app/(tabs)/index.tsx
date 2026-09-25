@@ -14,13 +14,13 @@ import { StreakRing } from "@/components/habits/streak-ring";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
 import { useStreaks } from "@/hooks/use-streaks";
+import { useToday } from "@/hooks/use-today";
 import {
   filterTodayHabits,
   getDailyProgress,
   getMotivationalMessage,
   isScheduledOn,
-  today,
-  yesterday,
+  subtractDays,
 } from "@rock_ht/utils";
 import type { StreakRow } from "@rock_ht/types";
 import { useRouter } from "expo-router";
@@ -37,8 +37,8 @@ export default function TodayScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const todayStr = today();
-  const yesterdayStr = yesterday();
+  const todayStr = useToday();
+  const yesterdayStr = subtractDays(todayStr, 1);
 
   const { streaks } = useStreaks();
 
