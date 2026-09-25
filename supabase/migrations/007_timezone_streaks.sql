@@ -27,21 +27,33 @@ declare
   v_prev_date         date    := null;
   r                   record;
 begin
-  -- Fetch user_id + the profile's timezone once. Only resolve zones
-  -- Postgres actually knows about (a lookup against pg_timezone_names)
-  -- so an invalid/garbage value can never make `at time zone` raise —
-  -- it just falls back to UTC.
-  select h.user_id,
-         coalesce(
-           (select name from pg_timezone_names where name = p.timezone),
-           'UTC'
-         )
+  -- Fetch user_id + the profile's raw timezone once.
+  select h.user_id, coalesce(nullif(p.timezone, ''), 'UTC')
     into v_user_id, v_timezone
     from public.habits h
     left join public.profiles p on p.id = h.user_id
    where h.id = p_habit_id;
 
-  v_today := (now() at time zone coalesce(v_timezone, 'UTC'))::date;
+  -- The habit may already be gone (this function is also called from the
+  -- on_completion_deleted trigger, which fires after a parent-first habit
+  -- delete has removed the habits row via the completions' own ON DELETE
+  -- CASCADE). With no habit left, v_user_id is null and there is nothing
+  -- to recalculate — upserting here would violate habit_streaks' NOT NULL
+  -- user_id (and its FK to habits, which is also gone). Bail out.
+  if v_user_id is null then
+    return;
+  end if;
+
+  -- Resolve "today" in the user's timezone. `at time zone` raises for a
+  -- name Postgres doesn't recognize (SQLSTATE 22023,
+  -- invalid_parameter_value); catch just that instead of paying for a
+  -- pg_timezone_names scan (which enumerates all tzdata entries) on every
+  -- completion insert/delete.
+  begin
+    v_today := (now() at time zone v_timezone)::date;
+  exception when invalid_parameter_value then
+    v_today := (now() at time zone 'UTC')::date;
+  end;
 
   -- Walk all completions in ascending date order to find longest streak
   for r in
