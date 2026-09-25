@@ -1,0 +1,18 @@
+{
+  "name": "@rock_ht/sync",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "uuid": "^11.1.0" },
+  "devDependencies": {
+    "@rock_ht/types": "*",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
+  }
+}
