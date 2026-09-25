@@ -25,7 +25,7 @@ export function LocalProvider({ children }: { children: ReactNode }) {
       Sentry.captureException(err);
       resetLocalStore();
       setError(err);
-      await SplashScreen.hideAsync();
+      await SplashScreen.hideAsync().catch(() => {});
     }
   }, []);
 

@@ -13,7 +13,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import NetInfo from "@react-native-community/netinfo";
 import { AppProviders } from "@/providers";
-import { useAuth } from "@/providers/supabase-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { getQueue, removeFromQueue } from "@/lib/offline-queue";
 import { addCompletion, removeCompletion } from "@rock_ht/db";
 import { supabase } from "@/lib/supabase";

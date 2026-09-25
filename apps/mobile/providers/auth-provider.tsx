@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import * as Sentry from "@sentry/react-native";
 import { useLocal } from "./local-provider";
 
 type AuthUser = { id: string; email: string | null; created_at: string };
@@ -12,9 +13,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser>({ id: userId, email: null, created_at: new Date().toISOString() });
 
   useEffect(() => {
-    void store.getProfile(userId).then((p) =>
-      setUser({ id: userId, email: p?.email || null, created_at: p?.created_at ?? new Date().toISOString() }),
-    );
+    let current = true;
+    void store
+      .getProfile(userId)
+      .then((p) => {
+        // Stale guard: ignore a profile fetched for a userId this effect has since moved past
+        // (e.g. sign-in swaps the local user mid-flight).
+        if (!current) return;
+        setUser({ id: userId, email: p?.email || null, created_at: p?.created_at ?? new Date().toISOString() });
+      })
+      .catch((e) => {
+        Sentry.captureException(e instanceof Error ? e : new Error(String(e)));
+      });
+    return () => {
+      current = false;
+    };
   }, [store, userId]);
 
   return (
