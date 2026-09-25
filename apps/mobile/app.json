@@ -2,7 +2,7 @@
   "expo": {
     "name": "rock",
     "slug": "rock_ht",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

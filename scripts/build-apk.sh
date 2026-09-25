@@ -6,6 +6,11 @@
 # Signs with the same release keystore as Apex Maps (MUH Studios cert), so
 # phones carrying a script-built rock APK only accept updates signed with it;
 # a debug-signed build fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+#
+# Releasing: set apps/mobile/app.json expo.version to X.Y.Z, commit, then
+# `git tag vX.Y.Z && git push --tags`. Right after, bump app.json's version to
+# the next minor (X.(Y+1).0) so later dev builds (…-dev.N) sort after this
+# release instead of colliding with it.
 set -euo pipefail
 
 usage() {
