@@ -41,3 +41,6 @@ coverage
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# TypeScript incremental build info
+*.tsbuildinfo

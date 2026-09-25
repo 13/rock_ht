@@ -26,8 +26,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy mobile skipped::Set EXPO_TOKEN repository secret to run the EAS build."
+          fi
+
   eas-build:
     name: EAS Build (${{ inputs.platform || 'all' }})
+    needs: check-secrets
+    if: needs.check-secrets.outputs.ready == 'true'
     runs-on: ubuntu-latest
 
     steps:
