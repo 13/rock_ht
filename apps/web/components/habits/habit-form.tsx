@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
@@ -45,7 +45,6 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps) {
   const {
     register,
     handleSubmit,
-    watch,
     control,
     setValue,
     formState: { errors, isSubmitting },
@@ -70,10 +69,11 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps) {
     },
   });
 
-  const selectedColor = watch("color");
-  const selectedIcon = watch("icon");
-  const freqType = watch("frequency_type");
-  const reminderEnabled = watch("reminder_enabled");
+  const selectedColor = useWatch({ control, name: "color" });
+  const selectedIcon = useWatch({ control, name: "icon" });
+  const freqType = useWatch({ control, name: "frequency_type" });
+  const reminderEnabled = useWatch({ control, name: "reminder_enabled" });
+  const title = useWatch({ control, name: "title" });
 
   const [suggestions, setSuggestions] = useState<
     { icon: string; title: string; reason: string }[]
@@ -129,7 +129,7 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps) {
         </div>
         <div>
           <p className="font-medium text-sm text-foreground">
-            {watch("title") || "Habit name"}
+            {title || "Habit name"}
           </p>
           <p className="text-xs text-muted-foreground">Preview</p>
         </div>
