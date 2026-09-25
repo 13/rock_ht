@@ -34,8 +34,9 @@ export default function TabsLayout() {
           borderTopColor: "#1e1e2a",
           borderTopWidth: 1,
           paddingBottom: bottomPadding,
-          paddingTop: 8,
-          height: 54 + bottomPadding,
+          paddingTop: 6,
+          // 54dp of content: the icon slot takes ~35dp, the label ~16dp
+          height: 60 + bottomPadding,
         },
         tabBarLabelStyle: {
           fontSize: 11,
