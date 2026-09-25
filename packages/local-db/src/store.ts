@@ -169,11 +169,18 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     })
   }
 
+  /**
+   * Completions never cascade-delete when their habit is soft-deleted (`deleteHabit` only
+   * touches the `habits` row), so every read of `habit_completions` must additionally exclude
+   * rows whose habit is gone, or a deleted habit's history keeps counting toward streaks/exports.
+   */
+  const LIVE_HABIT_FILTER = 'habit_id IN (SELECT id FROM habits WHERE deleted_at IS NULL)'
+
   async function listCompletions(
     userId: string,
     opts: { habitId?: string; startDate?: string; endDate?: string } = {},
   ): Promise<CompletionRow[]> {
-    const where = ['user_id = ?']
+    const where = ['user_id = ?', LIVE_HABIT_FILTER]
     const params: SqlParam[] = [userId]
     if (opts.habitId) { where.push('habit_id = ?'); params.push(opts.habitId) }
     if (opts.startDate) { where.push('completed_date >= ?'); params.push(opts.startDate) }
@@ -197,6 +204,33 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       if (cur && !cur.deleted_at) return { ...cur, deleted_at: ts, updated_at: ts }
       return null
     })
+  }
+
+  /**
+   * One-tap toggle: flips the completion based on the row's *current* state inside the write
+   * transaction, not a snapshot the caller read earlier (e.g. from a UI query cache that can be
+   * stale under a double-tap or two in-flight toggles). Same live/tombstone semantics as
+   * `setCompletion`: missing or tombstoned -> live, done -> tombstone. Returns the resulting
+   * done state so the caller can reconcile an optimistic update.
+   */
+  async function toggleCompletion(userId: string, input: ToggleCompletionInput): Promise<boolean> {
+    const id = completionId(input.habit_id, input.date)
+    let done = false
+    await write('habit_completions', async (tx) => {
+      const cur = await getRow('habit_completions', id, tx)
+      const ts = now()
+      if (!cur || cur.deleted_at) {
+        done = true
+        return {
+          id, habit_id: input.habit_id, user_id: userId, completed_date: input.date,
+          value: input.value ?? 1, note: input.note ?? cur?.note ?? null,
+          created_at: (cur?.created_at as string) ?? ts, updated_at: ts, deleted_at: null,
+        }
+      }
+      done = false
+      return { ...cur, deleted_at: ts, updated_at: ts }
+    })
+    return done
   }
 
   async function setCompletionNote(habitId: string, date: string, note: string) {
@@ -254,7 +288,7 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     const tables: Record<SyncTable, SyncRow[]> = {
       profiles: await selectRows('profiles', 'id = ?', [userId]),
       habits: await selectRows('habits', 'user_id = ?', [userId]),
-      habit_completions: await selectRows('habit_completions', 'user_id = ?', [userId]),
+      habit_completions: await selectRows('habit_completions', `user_id = ? AND ${LIVE_HABIT_FILTER}`, [userId]),
       journal_entries: await selectRows('journal_entries', 'user_id = ?', [userId]),
     }
     return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exported_at: now(), tables }
@@ -372,7 +406,7 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
   return {
     ensureProfile, getProfile, updateProfile,
     listHabits, getHabit, createHabit, updateHabit, deleteHabit,
-    listCompletions, setCompletion, setCompletionNote,
+    listCompletions, setCompletion, toggleCompletion, setCompletionNote,
     listJournal, createJournal, updateJournal, deleteJournal,
     getMeta: (key: string) => getMeta(key),
     setMeta: (key: string, value: string | null) => setMeta(key, value),

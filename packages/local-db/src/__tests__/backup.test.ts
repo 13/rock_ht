@@ -62,6 +62,24 @@ describe('backup', () => {
     expect((await s.exportBackup('u')).tables.habits).toEqual([])
   })
 
+  it('does not export completions of a deleted habit', async () => {
+    const { s, h } = await seeded('u')
+    await s.deleteHabit(h.id)
+    expect((await s.exportBackup('u')).tables.habit_completions).toEqual([])
+  })
+
+  it('restoring a deleted habit via import makes its completions visible again', async () => {
+    const { s, h } = await seeded('u')
+    const backup = await s.exportBackup('u')
+    await s.deleteHabit(h.id)
+    expect(await s.listCompletions('u')).toHaveLength(0)
+
+    await s.importBackup('u', backup)
+
+    expect((await s.getHabit(h.id))!.title).toBe('Read')
+    expect(await s.listCompletions('u')).toHaveLength(1)
+  })
+
   it('rolls the whole import back when a row is invalid', async () => {
     const { s: a } = await seeded('u')
     const backup = await a.exportBackup('u')

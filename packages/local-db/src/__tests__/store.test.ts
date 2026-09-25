@@ -155,6 +155,39 @@ describe('LocalStore', () => {
     expect(await s.listCompletions(U)).toHaveLength(0)
   })
 
+  it('toggleCompletion resolves two concurrent toggles to not-completed', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const [first, second] = await Promise.all([
+      s.toggleCompletion(U, { habit_id: h.id, date: '2026-01-05' }),
+      s.toggleCompletion(U, { habit_id: h.id, date: '2026-01-05' }),
+    ])
+    // Serialized inside the store: not-done -> done -> not-done, regardless of call order.
+    expect([first, second]).toEqual([true, false])
+    expect(await s.listCompletions(U)).toHaveLength(0)
+  })
+
+  it('toggleCompletion revives a tombstoned completion', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, false)
+    expect(await s.listCompletions(U)).toHaveLength(0)
+
+    const done = await s.toggleCompletion(U, { habit_id: h.id, date: '2026-01-05' })
+
+    expect(done).toBe(true)
+    expect(await s.listCompletions(U)).toHaveLength(1)
+  })
+
+  it('excludes completions of a deleted habit from listCompletions', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    expect(await s.listCompletions(U)).toHaveLength(1)
+
+    await s.deleteHabit(h.id)
+
+    expect(await s.listCompletions(U)).toHaveLength(0)
+  })
+
   it('dates journal entries with the local calendar date by default', async () => {
     const j = await s.createJournal(U, { content: 'hi' })
     expect(j.entry_date).toBe(today())
