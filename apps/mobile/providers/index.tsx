@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
-import { SupabaseProvider } from "./supabase-provider";
+import { LocalProvider } from "./local-provider";
+import { AuthProvider } from "./auth-provider";
 import { QueryProvider } from "./query-provider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <SupabaseProvider>
-      <QueryProvider>{children}</QueryProvider>
-    </SupabaseProvider>
+    <LocalProvider>
+      <AuthProvider>
+        <QueryProvider>{children}</QueryProvider>
+      </AuthProvider>
+    </LocalProvider>
   );
 }
