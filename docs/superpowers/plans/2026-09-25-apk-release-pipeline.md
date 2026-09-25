@@ -476,13 +476,17 @@ git commit -m "ci(mobile): build the release APK through build-apk.sh with the r
 
 This step uploads the Apex Maps release keystore to GitHub. After that, anyone with admin access to the repo or its Actions can sign APKs that phones accept as Apex Maps *and* rock updates. The user must decide this, and the user runs the commands. Never run them for the user.
 
+The secrets go into the `release` GitHub Environment (both workflow jobs declare `environment: release`), not plain repo secrets, so `--env release` is required:
+
 ```bash
 . ~/.config/apex-maps/signing.env
-base64 -w0 "$ANDROID_KEYSTORE" | gh secret set ANDROID_KEYSTORE_BASE64
-printf '%s' "$ANDROID_KEYSTORE_PASS" | gh secret set ANDROID_KEYSTORE_PASS
-printf '%s' "$ANDROID_KEY_ALIAS"     | gh secret set ANDROID_KEY_ALIAS
-printf '%s' "${ANDROID_KEY_PASS:-$ANDROID_KEYSTORE_PASS}" | gh secret set ANDROID_KEY_PASS
+base64 -w0 "$ANDROID_KEYSTORE" | gh secret set ANDROID_KEYSTORE_BASE64 --env release
+printf '%s' "$ANDROID_KEYSTORE_PASS" | gh secret set ANDROID_KEYSTORE_PASS --env release
+printf '%s' "$ANDROID_KEY_ALIAS"     | gh secret set ANDROID_KEY_ALIAS --env release
+printf '%s' "${ANDROID_KEY_PASS:-$ANDROID_KEYSTORE_PASS}" | gh secret set ANDROID_KEY_PASS --env release
 ```
+
+In repo Settings → Environments → `release`, also restrict deployment branches and tags to `main` and `v*` so the signing secrets are never exposed to a workflow run from an arbitrary branch or PR.
 
 If the user declines, the workflow skips itself with a notice and local `build-apk.sh` stays the release path. Tasks 1–2 still apply.
 

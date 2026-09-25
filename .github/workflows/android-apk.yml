@@ -13,6 +13,7 @@ jobs:
   check-secrets:
     name: Check signing secrets
     runs-on: ubuntu-latest
+    environment: release   # secrets checked below are environment-scoped
     permissions: {}
     outputs:
       ready: ${{ steps.check.outputs.ready }}
@@ -35,6 +36,7 @@ jobs:
     needs: check-secrets
     if: needs.check-secrets.outputs.ready == 'true'
     runs-on: ubuntu-latest
+    environment: release   # scopes the signing-key secrets to this job
     permissions:
       contents: write   # attach APK to the GitHub release
     env:
@@ -88,17 +90,26 @@ jobs:
           shopt -s nullglob
           files=(dist/rock_ht-*-release.apk)
           [ "${#files[@]}" = 1 ] || { echo "expected one APK, found: ${files[*]}"; exit 1; }
-          echo "path=${files[0]}" >> "$GITHUB_OUTPUT"
+          apk="${files[0]}"
+          stem="${apk%-release.apk}"
+          mapping="${stem}-mapping.txt"
+          cp apps/mobile/android/app/build/outputs/mapping/release/mapping.txt "$mapping"
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+          echo "mapping=$mapping" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
           name: rock_ht-android-apk
-          path: ${{ steps.apk.outputs.path }}
+          path: |
+            ${{ steps.apk.outputs.path }}
+            ${{ steps.apk.outputs.mapping }}
           if-no-files-found: error
 
       - name: Attach to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.apk.outputs.path }}
+          files: |
+            ${{ steps.apk.outputs.path }}
+            ${{ steps.apk.outputs.mapping }}
           generate_release_notes: true
