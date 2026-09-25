@@ -1,12 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/providers/supabase-provider";
-import { supabase } from "@/lib/supabase";
-import {
-  getJournalEntries,
-  createJournalEntry,
-  updateJournalEntry,
-  deleteJournalEntry,
-} from "@rock_ht/db";
+import { useLocal } from "@/providers/local-provider";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
@@ -16,18 +9,16 @@ import type {
 export const JOURNAL_KEY = ["journal"] as const;
 
 export function useJournal() {
-  const { user } = useAuth();
+  const { store, userId } = useLocal();
   const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: JOURNAL_KEY,
-    queryFn: () => getJournalEntries(supabase, user!.id),
-    enabled: !!user,
+    queryFn: () => store.listJournal(userId),
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: CreateJournalEntryInput) =>
-      createJournalEntry(supabase, user!.id, input),
+    mutationFn: (input: CreateJournalEntryInput) => store.createJournal(userId, input),
     onSuccess: (entry) => {
       queryClient.setQueryData<JournalEntry[]>(JOURNAL_KEY, (old) =>
         old ? [entry, ...old] : [entry]
@@ -36,8 +27,7 @@ export function useJournal() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateJournalEntryInput) =>
-      updateJournalEntry(supabase, input),
+    mutationFn: (input: UpdateJournalEntryInput) => store.updateJournal(input),
     onSuccess: (updated) => {
       queryClient.setQueryData<JournalEntry[]>(JOURNAL_KEY, (old) =>
         old?.map((e) => (e.id === updated.id ? updated : e))
@@ -46,7 +36,7 @@ export function useJournal() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (entryId: string) => deleteJournalEntry(supabase, entryId),
+    mutationFn: (entryId: string) => store.deleteJournal(entryId),
     onSuccess: (_data, entryId) => {
       queryClient.setQueryData<JournalEntry[]>(JOURNAL_KEY, (old) =>
         old?.filter((e) => e.id !== entryId)

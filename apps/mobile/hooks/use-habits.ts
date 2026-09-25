@@ -1,13 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/providers/supabase-provider";
-import { supabase } from "@/lib/supabase";
-import {
-  getHabits,
-  createHabit,
-  updateHabit,
-  archiveHabit,
-  deleteHabit,
-} from "@rock_ht/db";
+import { useLocal } from "@/providers/local-provider";
 import {
   scheduleHabitReminder,
   cancelHabitReminder,
@@ -34,18 +26,16 @@ async function syncReminder(habit: HabitWithFrequency): Promise<void> {
 }
 
 export function useHabits() {
-  const { user } = useAuth();
+  const { store, userId } = useLocal();
   const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: HABITS_KEY,
-    queryFn: () => getHabits(supabase, user!.id),
-    enabled: !!user,
+    queryFn: () => store.listHabits(userId),
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: CreateHabitInput) =>
-      createHabit(supabase, user!.id, input),
+    mutationFn: (input: CreateHabitInput) => store.createHabit(userId, input),
     onSuccess: async (habit) => {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old ? [...old, habit] : [habit]
@@ -55,7 +45,7 @@ export function useHabits() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (input: UpdateHabitInput) => updateHabit(supabase, input),
+    mutationFn: (input: UpdateHabitInput) => store.updateHabit(input),
     onSuccess: async (habit) => {
       await syncReminder(habit);
     },
@@ -65,7 +55,7 @@ export function useHabits() {
   });
 
   const archiveMutation = useMutation({
-    mutationFn: (id: string) => archiveHabit(supabase, id),
+    mutationFn: (id: string) => store.updateHabit({ id, is_archived: true }),
     onSuccess: async (_data, id) => {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old?.filter((h) => h.id !== id)
@@ -75,7 +65,7 @@ export function useHabits() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteHabit(supabase, id),
+    mutationFn: (id: string) => store.deleteHabit(id),
     onSuccess: async (_data, id) => {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old?.filter((h) => h.id !== id)
