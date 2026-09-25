@@ -1591,18 +1591,26 @@ export function useHabits() {
     queryFn: () => store.listHabits(userId),
   });
 
+  // Habits and streaks both derive from listHabits; anything that changes a habit's
+  // existence, frequency or archived state can change streak math too.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: HABITS_KEY });
+    queryClient.invalidateQueries({ queryKey: ["streaks"] });
+  };
+
   const createMutation = useMutation({
     mutationFn: (input: CreateHabitInput) => store.createHabit(userId, input),
     onSuccess: async (habit) => {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) => (old ? [...old, habit] : [habit]));
       await syncReminder(habit);
     },
+    onSettled: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateHabitInput) => store.updateHabit(input),
     onSuccess: async (habit) => { await syncReminder(habit); },
-    onSettled: () => { queryClient.invalidateQueries({ queryKey: HABITS_KEY }); },
+    onSettled: invalidate,
   });
 
   const archiveMutation = useMutation({
@@ -1611,6 +1619,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) => old?.filter((h) => h.id !== id));
       await cancelHabitReminder(id);
     },
+    onSettled: invalidate,
   });
 
   const deleteMutation = useMutation({
@@ -1619,6 +1628,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) => old?.filter((h) => h.id !== id));
       await cancelHabitReminder(id);
     },
+    onSettled: invalidate,
   });
 
   return {

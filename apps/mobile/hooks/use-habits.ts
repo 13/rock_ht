@@ -34,6 +34,13 @@ export function useHabits() {
     queryFn: () => store.listHabits(userId),
   });
 
+  // Habits and streaks both derive from listHabits; anything that changes a habit's
+  // existence, frequency or archived state can change streak math too.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: HABITS_KEY });
+    queryClient.invalidateQueries({ queryKey: ["streaks"] });
+  };
+
   const createMutation = useMutation({
     mutationFn: (input: CreateHabitInput) => store.createHabit(userId, input),
     onSuccess: async (habit) => {
@@ -42,6 +49,7 @@ export function useHabits() {
       );
       await syncReminder(habit);
     },
+    onSettled: invalidate,
   });
 
   const updateMutation = useMutation({
@@ -49,9 +57,7 @@ export function useHabits() {
     onSuccess: async (habit) => {
       await syncReminder(habit);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: HABITS_KEY });
-    },
+    onSettled: invalidate,
   });
 
   const archiveMutation = useMutation({
@@ -62,6 +68,7 @@ export function useHabits() {
       );
       await cancelHabitReminder(id);
     },
+    onSettled: invalidate,
   });
 
   const deleteMutation = useMutation({
@@ -72,6 +79,7 @@ export function useHabits() {
       );
       await cancelHabitReminder(id);
     },
+    onSettled: invalidate,
   });
 
   return {
