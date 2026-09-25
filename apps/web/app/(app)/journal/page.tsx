@@ -45,11 +45,21 @@ export default function JournalPage() {
   const savedRef = useRef({ content: "", mood: null as number | null });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync today entry from server
+  // Sync today entry from server. The `setState` calls are moved to render
+  // (see React docs "You Might Not Need an Effect"): whenever a new
+  // todayEntry object arrives (mirrors the old `[todayEntry]` deps),
+  // re-seed the local editable state from it. `savedRef` is a ref, which
+  // can't be written during render, so it's still updated from an effect
+  // with the same dependency and guard as before.
+  const [syncedTodayEntry, setSyncedTodayEntry] = useState<typeof todayEntry>(null);
+  if (todayEntry && todayEntry !== syncedTodayEntry) {
+    setSyncedTodayEntry(todayEntry);
+    setTodayContent(todayEntry.content);
+    setTodayMood(todayEntry.mood);
+  }
+
   useEffect(() => {
     if (todayEntry) {
-      setTodayContent(todayEntry.content);
-      setTodayMood(todayEntry.mood);
       savedRef.current = { content: todayEntry.content, mood: todayEntry.mood };
     }
   }, [todayEntry]);

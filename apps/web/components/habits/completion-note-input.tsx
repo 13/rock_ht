@@ -23,10 +23,26 @@ export function CompletionNoteInput({
   const saved = useRef(initialNote ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync if initialNote changes (e.g., after a refetch)
-  useEffect(() => {
+  // Sync if initialNote changes (e.g., after a refetch), or right after
+  // blur. The `setValue` call is moved to render (see React docs "You
+  // Might Not Need an Effect"): mirrors the old
+  // `useEffect(fn, [initialNote, focused])` by re-running the body whenever
+  // either tracked value changes from its previous render, while keeping
+  // the `!focused` guard. `saved` is a ref, which can't be written during
+  // render, so it's still updated from an effect with the same dependency
+  // array and guard as before.
+  const [prevInitialNote, setPrevInitialNote] = useState(initialNote);
+  const [prevFocused, setPrevFocused] = useState(focused);
+  if (initialNote !== prevInitialNote || focused !== prevFocused) {
+    setPrevInitialNote(initialNote);
+    setPrevFocused(focused);
     if (!focused) {
       setValue(initialNote ?? "");
+    }
+  }
+
+  useEffect(() => {
+    if (!focused) {
       saved.current = initialNote ?? "";
     }
   }, [initialNote, focused]);

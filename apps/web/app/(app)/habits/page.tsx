@@ -45,17 +45,26 @@ export default function HabitsPage() {
   const [editingHabit, setEditingHabit] = useState<HabitWithFrequency | null>(null);
   const [deletingHabit, setDeletingHabit] = useState<HabitWithFrequency | null>(null);
 
-  // Support ?edit=<id> deep-link from habit detail page
-  useEffect(() => {
-    const editId = searchParams.get("edit");
-    if (editId) {
-      const habit = habits.find((h) => h.id === editId);
-      if (habit) {
-        setEditingHabit(habit);
-        router.replace("/habits");
-      }
+  // Support ?edit=<id> deep-link from habit detail page. Adjust state during
+  // render (see React docs "You Might Not Need an Effect") instead of an
+  // effect: once a matching habit is found for the current ?edit id, open
+  // it and remember the id so it isn't reopened on later renders.
+  const editId = searchParams.get("edit");
+  const [handledEditId, setHandledEditId] = useState<string | null>(null);
+  if (editId && editId !== handledEditId) {
+    const habit = habits.find((h) => h.id === editId);
+    if (habit) {
+      setHandledEditId(editId);
+      setEditingHabit(habit);
     }
-  }, [searchParams, habits]);
+  }
+
+  // Once the deep-linked habit has been opened, clear the ?edit= param.
+  useEffect(() => {
+    if (handledEditId && searchParams.get("edit") === handledEditId) {
+      router.replace("/habits");
+    }
+  }, [handledEditId, searchParams, router]);
 
   const openCreate = useCallback(() => setShowCreateModal(true), []);
   useKeyboardShortcuts({ n: openCreate });

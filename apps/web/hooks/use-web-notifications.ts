@@ -1,22 +1,54 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import type { HabitWithFrequency } from "@rock_ht/types";
 
-export function useWebNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>("default");
-  const [supported, setSupported] = useState(false);
+function isNotificationSupported(): boolean {
+  return typeof window !== "undefined" && "Notification" in window;
+}
 
-  useEffect(() => {
-    const ok = typeof window !== "undefined" && "Notification" in window;
-    setSupported(ok);
-    if (ok) setPermission(Notification.permission);
-  }, []);
+function getSupportedSnapshot(): boolean {
+  return isNotificationSupported();
+}
+
+function getServerSupportedSnapshot(): boolean {
+  return false;
+}
+
+function getPermissionSnapshot(): NotificationPermission {
+  return isNotificationSupported() ? Notification.permission : "default";
+}
+
+function getServerPermissionSnapshot(): NotificationPermission {
+  return "default";
+}
+
+// No live updates to subscribe to — the browser has no permissionchange
+// event with reliable cross-browser support; we just need the client-only
+// snapshot below instead of the default SSR value.
+function subscribeNoop(): () => void {
+  return () => {};
+}
+
+export function useWebNotifications() {
+  const supported = useSyncExternalStore(
+    subscribeNoop,
+    getSupportedSnapshot,
+    getServerSupportedSnapshot
+  );
+  const detectedPermission = useSyncExternalStore(
+    subscribeNoop,
+    getPermissionSnapshot,
+    getServerPermissionSnapshot
+  );
+  const [requestedPermission, setRequestedPermission] =
+    useState<NotificationPermission | null>(null);
+  const permission = requestedPermission ?? detectedPermission;
 
   async function requestPermission(): Promise<boolean> {
     if (!supported) return false;
     const result = await Notification.requestPermission();
-    setPermission(result);
+    setRequestedPermission(result);
     return result === "granted";
   }
 
