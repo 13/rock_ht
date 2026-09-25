@@ -6,12 +6,14 @@ interface RateLimitEntry {
 const store = new Map<string, RateLimitEntry>()
 
 // Prune expired entries every 10 minutes to prevent memory leaks
-setInterval(() => {
+const pruneInterval = setInterval(() => {
   const now = Date.now()
   for (const [key, entry] of store) {
     if (now >= entry.resetAt) store.delete(key)
   }
 }, 10 * 60 * 1000)
+// Don't let this interval keep the process (or a test runner) alive.
+pruneInterval.unref?.()
 
 /**
  * Returns true if the request is within the rate limit, false if it should be blocked.
