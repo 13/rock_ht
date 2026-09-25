@@ -2,7 +2,8 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { vars } from "nativewind";
 import { StatusBar } from "expo-status-bar";
-import { useProfile } from "@/hooks/use-profile";
+import { useQueryClient } from "@tanstack/react-query";
+import { PROFILE_KEY, useProfile } from "@/hooks/use-profile";
 import { PALETTES, type Palette, type ThemeName } from "./palettes";
 
 interface ThemeContextValue {
@@ -23,6 +24,7 @@ function hexToRgbChannels(hex: string): string {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { profile, isLoading, updateProfile } = useProfile();
+  const queryClient = useQueryClient();
 
   const name: ThemeName =
     !isLoading && profile?.theme && profile.theme in PALETTES
@@ -50,10 +52,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       name,
       colors,
       setTheme: async (next) => {
-        await updateProfile({ theme: next });
+        const previous = profile?.theme ?? name;
+        queryClient.setQueryData(PROFILE_KEY, (current: typeof profile) =>
+          current ? { ...current, theme: next } : current
+        );
+        try {
+          await updateProfile({ theme: next });
+        } catch (error) {
+          queryClient.setQueryData(PROFILE_KEY, (current: typeof profile) =>
+            current ? { ...current, theme: previous } : current
+          );
+          throw error;
+        }
       },
     }),
-    [name, colors, updateProfile]
+    [name, colors, updateProfile, profile, queryClient]
   );
 
   return (
