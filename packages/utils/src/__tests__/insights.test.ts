@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateInsights, completionsByHour, peakHour } from '../insights'
+import { formatDate } from '../dates'
 import type { HabitWithFrequency, CompletionRow, StreakRow } from '@sisigo/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -195,7 +196,7 @@ describe('generateInsights', () => {
     const completions = Array.from({ length: 100 }, (_, i) => {
       const d = new Date('2026-01-01')
       d.setDate(d.getDate() + i)
-      const dateStr = d.toISOString().split('T')[0]
+      const dateStr = formatDate(d)
       return makeCompletion('h1', dateStr!)
     })
     const streaks = [makeStreak('h1', 100, 100)]
@@ -243,7 +244,7 @@ describe('generateInsights', () => {
     const completions = Array.from({ length: 27 }, (_, i) => {
       const d = new Date('2026-06-12')
       d.setDate(d.getDate() + i)
-      const dateStr = d.toISOString().split('T')[0]
+      const dateStr = formatDate(d)
       return makeCompletion('h1', dateStr!)
     })
     const streaks = [makeStreak('h1', 5, 10)]
@@ -289,7 +290,7 @@ describe('generateInsights', () => {
     const completions = Array.from({ length: 12 }, (_, i) => {
       const d = new Date('2026-06-01')
       d.setDate(d.getDate() + i)
-      const dateStr = d.toISOString().split('T')[0]
+      const dateStr = formatDate(d)
       return makeCompletion('h1', dateStr!)
     })
     const streaks = [makeStreak('h1', 1, 1)]
@@ -359,7 +360,7 @@ describe('generateInsights', () => {
     const completions = Array.from({ length: 20 }, (_, i) => {
       const d = new Date('2026-06-20')
       d.setDate(d.getDate() + i)
-      const dateStr = d.toISOString().split('T')[0]
+      const dateStr = formatDate(d)
       return makeCompletion('h1', dateStr!)
     })
     const streaks = [makeStreak('h1', 6, 6)]

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isScheduledOn, calculateStreak, weeklyConsistencyScore } from '../streaks'
+import { subtractDays, today } from '../dates'
 import type { Frequency, HabitWithFrequency, CompletionRow } from '@sisigo/types'
 
 // ─── Frequency fixtures ───────────────────────────────────────────────────────
@@ -12,9 +13,7 @@ const timesPerWeek: Frequency = { type: 'times_per_week', count: 3 }
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]!
+  return subtractDays(today(), n)
 }
 
 function makeHabit(id: string, frequency: Frequency): HabitWithFrequency {

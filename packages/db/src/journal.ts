@@ -1,3 +1,4 @@
+import { today } from "@sisigo/utils";
 import type { TypedSupabaseClient } from "./client";
 import type {
   JournalEntry,
@@ -55,7 +56,7 @@ export async function createJournalEntry(
   const insert: TablesInsert<"journal_entries"> = {
     user_id: userId,
     habit_id: input.habit_id ?? null,
-    entry_date: input.entry_date ?? new Date().toISOString().split("T")[0]!,
+    entry_date: input.entry_date ?? today(),
     content: input.content,
     mood: input.mood ?? null,
   };

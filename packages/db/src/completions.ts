@@ -1,3 +1,4 @@
+import { today, subtractDays } from "@sisigo/utils";
 import type { TypedSupabaseClient } from "./client";
 import type { CompletionRow, ToggleCompletionInput, TablesInsert } from "@sisigo/types";
 
@@ -122,10 +123,8 @@ export async function getLast30DaysCompletions(
   client: TypedSupabaseClient,
   userId: string
 ): Promise<CompletionRow[]> {
-  const endDate = new Date().toISOString().split("T")[0]!;
-  const startDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0]!;
+  const endDate = today();
+  const startDate = subtractDays(endDate, 29);
 
   return getCompletions(client, userId, { startDate, endDate });
 }

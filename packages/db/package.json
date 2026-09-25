@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@sisigo/utils": "*",
     "@supabase/supabase-js": "^2.47.2",
     "date-fns": "^4.1.0"
   },
