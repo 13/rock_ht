@@ -21,4 +21,9 @@ describe('todayIn', () => {
     const result = todayIn('Not/AZone', new Date('2026-03-10T23:00:00Z'))
     expect(result).toBe('2026-03-10')
   })
+
+  it('falls back to UTC for an empty time zone', () => {
+    const result = todayIn('', new Date('2026-03-10T23:00:00Z'))
+    expect(result).toBe('2026-03-10')
+  })
 })

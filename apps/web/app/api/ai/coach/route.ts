@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   }
 
   const db = asDb(supabase);
-  const profile = await getProfile(db, user.id);
+  const profile = await getProfile(db, user.id).catch(() => null);
   const todayStr = todayIn(profile?.timezone ?? "UTC");
 
   const [habits, streaks, completions] = await Promise.all([
