@@ -32,6 +32,13 @@ A prioritised list of improvements, based on this session's CI runs, the code re
 | 14 | **Large page components** | `settings/page.tsx` (468 lines), `dashboard/page.tsx` (347) and `journal/page.tsx` (330) mix data, state and markup. Split the sections into `components/settings/*` when these pages are next touched, not as a standalone refactor. | M |
 | 15 | **Dependency/CI hygiene** | Add Dependabot (npm + GitHub Actions); pin actions to SHAs; approve `unrs-resolver` in `npm install-scripts`; cache Gradle and Metro in the APK workflow (the APK job takes about 8 min). | S |
 
+## Follow-ups found during P0
+
+| # | Item | Evidence | Fix | Size |
+|---|---|---|---|---|
+| 16 ★ | **Streak trigger uses the server's UTC date** | `supabase/migrations/003_functions_triggers.sql:110`. `recalculate_streak` compares against `current_date`, which is UTC on the DB server. For a user west of UTC in the evening after UTC midnight, un-toggling today's completion zeroes a live streak. The displayed streaks come from `habit_streaks` via `getStreaks` on both web and mobile. | In a new migration, compute "today" as `(now() at time zone p.timezone)::date` using `profiles.timezone`. | S–M |
+| 17 | **Server-side "today" for AI routes** | `apps/web/app/api/ai/journal-prompt/route.ts:37` and `api/ai/coach` (via `getLast30DaysCompletions`) run in the container timezone (UTC), not the user's. | Have the client send its local date, or derive it from `profiles.timezone`. | S |
+
 ## Suggested order
 
 1. **P0 #1–#4** as one small branch: bugs plus CI green (about 2 h).
