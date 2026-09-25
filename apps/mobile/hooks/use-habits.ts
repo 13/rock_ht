@@ -14,15 +14,8 @@ import type {
 export const HABITS_KEY = ["habits"] as const;
 
 async function syncReminder(habit: HabitWithFrequency): Promise<void> {
-  if (habit.reminder_enabled && habit.reminder_time) {
-    const status = await getNotificationPermissionStatus();
-    if (status === "granted") {
-      const timeStr = habit.reminder_time.slice(0, 5); // "HH:MM"
-      await scheduleHabitReminder(habit.id, habit.title, habit.icon, timeStr);
-    }
-  } else {
-    await cancelHabitReminder(habit.id);
-  }
+  if ((await getNotificationPermissionStatus()) === "granted") await scheduleHabitReminder(habit);
+  else await cancelHabitReminder(habit.id);
 }
 
 export function useHabits() {

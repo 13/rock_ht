@@ -1,5 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { reminderTriggers, type ReminderTrigger } from "@rock_ht/utils";
+import type { HabitWithFrequency } from "@rock_ht/types";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -25,34 +27,53 @@ export async function getNotificationPermissionStatus(): Promise<string> {
   return perms.status;
 }
 
-export async function scheduleHabitReminder(
-  habitId: string,
-  habitTitle: string,
-  habitIcon: string,
-  reminderTime: string // "HH:MM"
-): Promise<string> {
-  const [hoursStr, minutesStr] = reminderTime.split(":");
-  const hours = parseInt(hoursStr ?? "9", 10);
-  const minutes = parseInt(minutesStr ?? "0", 10);
+export type ReminderHabit = Pick<
+  HabitWithFrequency,
+  "id" | "title" | "icon" | "frequency" | "reminder_time" | "reminder_enabled" | "is_archived"
+>;
 
-  // Cancel existing reminder for this habit first
-  await cancelHabitReminder(habitId);
+function toExpoTrigger(t: ReminderTrigger): Notifications.SchedulableNotificationTriggerInput {
+  return t.kind === "daily"
+    ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: t.hour, minute: t.minute }
+    : { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: t.weekday, hour: t.hour, minute: t.minute };
+}
 
-  const identifier = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: `${habitIcon} ${habitTitle}`,
-      body: "Time for your habit! Keep the streak going.",
-      data: { habitId },
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: hours,
-      minute: minutes,
-    },
-  });
+/** Replaces all reminders of one habit. Returns the scheduled notification ids. */
+export async function scheduleHabitReminder(habit: ReminderHabit): Promise<string[]> {
+  await cancelHabitReminder(habit.id);
+  if (!habit.reminder_enabled || !habit.reminder_time || habit.is_archived) return [];
+  const ids: string[] = [];
+  for (const trigger of reminderTriggers(habit.frequency, habit.reminder_time)) {
+    ids.push(
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `${habit.icon} ${habit.title}`,
+          body: "Time for your habit! Keep the streak going.",
+          data: { habitId: habit.id },
+          sound: true,
+        },
+        trigger: toExpoTrigger(trigger),
+      }),
+    );
+  }
+  return ids;
+}
 
-  return identifier;
+/**
+ * The local DB is the source of truth: cancel every habit reminder, then
+ * schedule from `habits`. The daily digest (data.type) is left alone.
+ */
+export async function rebuildReminders(habits: ReminderHabit[]): Promise<number> {
+  if ((await getNotificationPermissionStatus()) !== "granted") return 0;
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(
+    scheduled
+      .filter((n) => typeof n.content.data?.["habitId"] === "string")
+      .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+  );
+  let count = 0;
+  for (const habit of habits) count += (await scheduleHabitReminder(habit)).length;
+  return count;
 }
 
 export async function cancelHabitReminder(habitId: string): Promise<void> {

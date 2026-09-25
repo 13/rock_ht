@@ -13,10 +13,12 @@ import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppProviders } from "@/providers";
 import { useProfile } from "@/hooks/use-profile";
+import { useRebuildRemindersOnLaunch } from "@/hooks/use-reminders";
 
 SplashScreen.preventAutoHideAsync();
 
 function OnboardingGuard() {
+  useRebuildRemindersOnLaunch();
   const { profile, isLoading } = useProfile();
   const segments = useSegments();
   const router = useRouter();

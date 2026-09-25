@@ -11,7 +11,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/providers/auth-provider";
+import { useLocal } from "@/providers/local-provider";
 import { useNotifications } from "@/hooks/use-notifications";
+import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 import { hapticLight, hapticError } from "@/lib/haptics";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -131,6 +133,7 @@ function Divider() {
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const { store, userId } = useLocal();
   const { isGranted, isLoading, requestPermission, sendTest } =
     useNotifications();
   const [notifEnabled, setNotifEnabled] = useState(false);
@@ -163,6 +166,7 @@ export default function SettingsScreen() {
         }
       }
       setNotifEnabled(true);
+      await rebuildRemindersFromStore(store, userId);
     } else {
       setNotifEnabled(false);
     }

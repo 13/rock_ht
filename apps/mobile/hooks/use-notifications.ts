@@ -26,13 +26,7 @@ export function useNotifications() {
   }
 
   async function enableHabitReminder(habit: HabitWithFrequency): Promise<void> {
-    if (!habit.reminder_enabled || !habit.reminder_time) return;
-    await scheduleHabitReminder(
-      habit.id,
-      habit.title,
-      habit.icon,
-      habit.reminder_time
-    );
+    await scheduleHabitReminder(habit);
   }
 
   async function disableHabitReminder(habitId: string): Promise<void> {
