@@ -121,9 +121,9 @@ export async function updateCompletionNote(
 
 export async function getLast30DaysCompletions(
   client: TypedSupabaseClient,
-  userId: string
+  userId: string,
+  endDate: string = today()
 ): Promise<CompletionRow[]> {
-  const endDate = today();
   const startDate = subtractDays(endDate, 29);
 
   return getCompletions(client, userId, { startDate, endDate });

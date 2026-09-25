@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getHabits, getLast30DaysCompletions, getTodayCompletions } from "@rock_ht/db";
+import { getHabits, getLast30DaysCompletions, getTodayCompletions, getProfile } from "@rock_ht/db";
 import { buildJournalPromptSystem } from "@/lib/ai-context";
 import { rateLimit } from "@/lib/rate-limit";
-import { today } from "@rock_ht/utils";
+import { todayIn } from "@rock_ht/utils";
 import type { TypedSupabaseClient } from "@rock_ht/db";
 
 export const runtime = "nodejs";
@@ -34,11 +34,12 @@ export async function POST() {
   }
 
   const db = asDb(supabase);
-  const todayStr = today();
+  const profile = await getProfile(db, user.id);
+  const todayStr = todayIn(profile?.timezone ?? "UTC");
 
   const [habits, completions, todayCompletions] = await Promise.all([
     getHabits(db, user.id),
-    getLast30DaysCompletions(db, user.id),
+    getLast30DaysCompletions(db, user.id, todayStr),
     getTodayCompletions(db, user.id, todayStr),
   ]);
 

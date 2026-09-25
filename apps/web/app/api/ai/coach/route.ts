@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getHabits, getStreaks, getLast30DaysCompletions } from "@rock_ht/db";
+import { getHabits, getStreaks, getLast30DaysCompletions, getProfile } from "@rock_ht/db";
 import { buildCoachSystemPrompt } from "@/lib/ai-context";
 import { rateLimit } from "@/lib/rate-limit";
+import { todayIn } from "@rock_ht/utils";
 import type { TypedSupabaseClient } from "@rock_ht/db";
 
 export const runtime = "nodejs";
@@ -43,10 +44,13 @@ export async function POST(req: Request) {
   }
 
   const db = asDb(supabase);
+  const profile = await getProfile(db, user.id);
+  const todayStr = todayIn(profile?.timezone ?? "UTC");
+
   const [habits, streaks, completions] = await Promise.all([
     getHabits(db, user.id),
     getStreaks(db, user.id),
-    getLast30DaysCompletions(db, user.id),
+    getLast30DaysCompletions(db, user.id, todayStr),
   ]);
 
   const systemPrompt = buildCoachSystemPrompt(habits, streaks, completions);
