@@ -705,7 +705,7 @@ interface LocalStore {
   deleteJournal(id: string): Promise<void>
   getMeta(key: string): Promise<string | null>
   setMeta(key: string, value: string | null): Promise<void>
-  claim(fromUserId: string, toUserId: string): Promise<void>
+  claim(toUserId: string, opts: { pushLocalProfile: boolean }): Promise<void>
   sync: SyncLocal
 }
 ```
@@ -781,14 +781,61 @@ describe('LocalStore', () => {
     expect((await s.listJournal(U))[0]!.content).toBe('hi')
   })
 
-  it('claim rewrites user ids and re-queues every row', async () => {
+  it('claim on sign-up pushes the local profile and re-queues every row', async () => {
     await s.ensureProfile(U)
-    await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.createJournal(U, { content: 'hi' })
+    await s.sync.applyRemote([], '7')
     const before = (await s.sync.readOutbox(100)).length
-    await s.claim(U, 'account-1')
+
+    await s.claim('account-1', { pushLocalProfile: true })
+
     expect(await s.listHabits('account-1')).toHaveLength(1)
     expect(await s.getProfile('account-1')).not.toBeNull()
-    expect((await s.sync.readOutbox(100)).length).toBeGreaterThan(before)
+    expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
+    expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
+    const out = await s.sync.readOutbox(100)
+    expect(out.length).toBeGreaterThan(before)
+    expect(out.some((e) => e.change.table === 'profiles')).toBe(true)
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('claim on sign-in keeps the server profile: rewrites it locally without queuing or bumping it', async () => {
+    const original = await s.ensureProfile(U)
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.createJournal(U, { content: 'hi' })
+    await s.sync.applyRemote([], '7')
+
+    await s.claim('account-1', { pushLocalProfile: false })
+
+    const profile = await s.getProfile('account-1')
+    expect(profile).not.toBeNull()
+    expect(profile!.updated_at).toBe(original.updated_at)
+    expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
+    expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
+    const out = await s.sync.readOutbox(100)
+    expect(out.some((e) => e.change.table === 'profiles')).toBe(false)
+    expect(out.some((e) => e.change.table === 'habits')).toBe(true)
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('updateProfile ignores undefined fields instead of nulling them', async () => {
+    const original = await s.ensureProfile(U)
+    const updated = await s.updateProfile(U, { theme: undefined, display_name: 'X' })
+    expect(updated.display_name).toBe('X')
+    expect(updated.theme).toBe(original.theme)
+    expect(await s.getProfile(U)).toMatchObject({ display_name: 'X', theme: original.theme })
+  })
+
+  it('does not lose a completion toggle to a read-before-write race', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await Promise.all([
+      s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true),
+      s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, false),
+    ])
+    expect(await s.listCompletions(U)).toHaveLength(0)
   })
 
   it('dates journal entries with the local calendar date by default', async () => {
@@ -801,6 +848,35 @@ describe('LocalStore', () => {
     expect(p.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   })
 })
+```
+
+The race test requires `openTestDriver` (`src/__tests__/helpers.ts`) to serialize concurrent top-level `transaction()` calls on the single connection — queue a second caller behind the first's commit/rollback instead of nesting `BEGIN IMMEDIATE`, matching the interface's "one exclusive transaction" contract and what a real async driver (e.g. expo-sqlite) does:
+```ts
+export function openTestDriver(): SqlDriver {
+  const db = new Database(':memory:')
+  let queue: Promise<unknown> = Promise.resolve()
+
+  function make(inTx: boolean): SqlDriver {
+    const driver: SqlDriver = {
+      async exec(sql) { db.exec(sql) },
+      async run(sql, params = []) { db.prepare(sql).run(...params) },
+      async all<T>(sql: string, params: SqlParam[] = []) { return db.prepare(sql).all(...params) as T[] },
+      async first<T>(sql: string, params: SqlParam[] = []) { return (db.prepare(sql).get(...params) ?? null) as T | null },
+      async transaction(fn) {
+        if (inTx) return fn(driver)
+        const result = queue.then(async () => {
+          db.exec('BEGIN IMMEDIATE')
+          try { await fn(make(true)); db.exec('COMMIT') } catch (e) { db.exec('ROLLBACK'); throw e }
+        })
+        queue = result.catch(() => undefined)
+        return result
+      },
+    }
+    return driver
+  }
+
+  return make(false)
+}
 ```
 
 - [ ] **Step 2: Run, verify fail**
@@ -835,6 +911,11 @@ const CURSOR_KEY = 'sync_cursor'
 
 const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
+/** Drop keys whose value is `undefined` so a partial input never overwrites a column with null. */
+function filterDefined<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
 export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone }: LocalStoreDeps) {
   async function upsert(db: SqlDriver, table: SyncTable, row: SyncRow): Promise<void> {
     const sql = toSqlRow(table, row)
@@ -851,12 +932,22 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     await db.run('INSERT INTO outbox (tbl, row_json) VALUES (?, ?)', [table, JSON.stringify(row)])
   }
 
-  /** Local write: row + outbox snapshot in one transaction. */
-  async function write(table: SyncTable, row: SyncRow): Promise<void> {
+  /**
+   * Local write: `compute` reads the current row (if any) via `tx` and returns the row to persist, or
+   * null for a no-op. The read and the upsert+outbox insert all run inside the same exclusive
+   * transaction, so a concurrent write can't interleave between the read and the write (TOCTOU fix,
+   * review round 1: the previous version read via `driver` before `write` opened its transaction).
+   */
+  async function write(table: SyncTable, compute: (tx: SqlDriver) => Promise<SyncRow | null>): Promise<SyncRow | null> {
+    let result: SyncRow | null = null
     await driver.transaction(async (tx) => {
+      const row = await compute(tx)
+      if (!row) return
       await upsert(tx, table, row)
       await enqueue(tx, table, row)
+      result = row
     })
+    return result
   }
 
   async function getRow(table: SyncTable, id: string, db: SqlDriver = driver): Promise<SyncRow | null> {
@@ -879,24 +970,29 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     return (rows[0] as unknown as ProfileRow) ?? null
   }
 
-  async function ensureProfile(userId: string): Promise<ProfileRow> {
-    const existing = await getProfile(userId)
-    if (existing) return existing
+  function defaultProfileRow(userId: string): SyncRow {
     const ts = now()
-    const row: SyncRow = {
+    return {
       id: userId, email: '', display_name: null, avatar_url: null, timezone: timeZone(), theme: 'dark',
       onboarding_completed: false, time_format: '12h', date_format: 'MM/DD/YYYY',
       created_at: ts, updated_at: ts, deleted_at: null,
     }
+  }
+
+  async function ensureProfile(userId: string): Promise<ProfileRow> {
+    const existing = await getProfile(userId)
+    if (existing) return existing
+    const row = defaultProfileRow(userId)
     // Not queued: the server creates profiles on signup; local edits later are queued.
     await upsert(driver, 'profiles', row)
     return row as unknown as ProfileRow
   }
 
   async function updateProfile(userId: string, input: UpdateProfileInput): Promise<ProfileRow> {
-    const cur = await ensureProfile(userId)
-    const row = { ...(cur as unknown as SyncRow), ...input, updated_at: now() } as SyncRow
-    await write('profiles', row)
+    const row = await write('profiles', async (tx) => {
+      const cur = (await getRow('profiles', userId, tx)) ?? defaultProfileRow(userId)
+      return { ...cur, ...filterDefined(input), updated_at: now() }
+    })
     return row as unknown as ProfileRow
   }
 
@@ -924,30 +1020,33 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       reminder_time: input.reminder_time ?? null, reminder_enabled: input.reminder_enabled ?? false,
       is_archived: false, sort_order: 0, created_at: ts, updated_at: ts, deleted_at: null,
     }
-    await write('habits', row)
+    await write('habits', async () => row)
     return toHabit(row)
   }
 
   async function updateHabit(input: UpdateHabitInput) {
-    const cur = await getRow('habits', input.id)
-    if (!cur || cur.deleted_at) throw new Error(`habit ${input.id} not found`)
-    const { id: _id, frequency, ...rest } = input
-    const defined = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined))
-    const row: SyncRow = {
-      ...cur,
-      ...defined,
-      ...(frequency ? { frequency: frequencyToJson(frequency) } : {}),
-      updated_at: now(),
-    }
-    await write('habits', row)
-    return toHabit(row)
+    const row = await write('habits', async (tx) => {
+      const cur = await getRow('habits', input.id, tx)
+      if (!cur || cur.deleted_at) throw new Error(`habit ${input.id} not found`)
+      const { id: _id, frequency, ...rest } = input
+      const defined = filterDefined(rest)
+      return {
+        ...cur,
+        ...defined,
+        ...(frequency ? { frequency: frequencyToJson(frequency) } : {}),
+        updated_at: now(),
+      }
+    })
+    return toHabit(row!)
   }
 
   async function deleteHabit(id: string) {
-    const cur = await getRow('habits', id)
-    if (!cur) return
-    const ts = now()
-    await write('habits', { ...cur, deleted_at: ts, updated_at: ts })
+    await write('habits', async (tx) => {
+      const cur = await getRow('habits', id, tx)
+      if (!cur) return null
+      const ts = now()
+      return { ...cur, deleted_at: ts, updated_at: ts }
+    })
   }
 
   async function listCompletions(
@@ -965,23 +1064,27 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
 
   async function setCompletion(userId: string, input: ToggleCompletionInput, done: boolean) {
     const id = completionId(input.habit_id, input.date)
-    const cur = await getRow('habit_completions', id)
-    const ts = now()
-    if (done) {
-      await write('habit_completions', {
-        id, habit_id: input.habit_id, user_id: userId, completed_date: input.date,
-        value: input.value ?? 1, note: input.note ?? cur?.note ?? null,
-        created_at: (cur?.created_at as string) ?? ts, updated_at: ts, deleted_at: null,
-      })
-    } else if (cur && !cur.deleted_at) {
-      await write('habit_completions', { ...cur, deleted_at: ts, updated_at: ts })
-    }
+    await write('habit_completions', async (tx) => {
+      const cur = await getRow('habit_completions', id, tx)
+      const ts = now()
+      if (done) {
+        return {
+          id, habit_id: input.habit_id, user_id: userId, completed_date: input.date,
+          value: input.value ?? 1, note: input.note ?? cur?.note ?? null,
+          created_at: (cur?.created_at as string) ?? ts, updated_at: ts, deleted_at: null,
+        }
+      }
+      if (cur && !cur.deleted_at) return { ...cur, deleted_at: ts, updated_at: ts }
+      return null
+    })
   }
 
   async function setCompletionNote(habitId: string, date: string, note: string) {
-    const cur = await getRow('habit_completions', completionId(habitId, date))
-    if (!cur || cur.deleted_at) return
-    await write('habit_completions', { ...cur, note: note || null, updated_at: now() })
+    await write('habit_completions', async (tx) => {
+      const cur = await getRow('habit_completions', completionId(habitId, date), tx)
+      if (!cur || cur.deleted_at) return null
+      return { ...cur, note: note || null, updated_at: now() }
+    })
   }
 
   async function listJournal(userId: string, opts: { limit?: number; habitId?: string } = {}) {
@@ -1000,28 +1103,31 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       entry_date: input.entry_date ?? today(), content: input.content, mood: input.mood ?? null,
       created_at: ts, updated_at: ts, deleted_at: null,
     }
-    await write('journal_entries', row)
+    await write('journal_entries', async () => row)
     return row as unknown as JournalEntry
   }
 
   async function updateJournal(input: UpdateJournalEntryInput) {
-    const cur = await getRow('journal_entries', input.id)
-    if (!cur || cur.deleted_at) throw new Error(`journal entry ${input.id} not found`)
-    const row: SyncRow = {
-      ...cur,
-      ...(input.content !== undefined ? { content: input.content } : {}),
-      ...(input.mood !== undefined ? { mood: input.mood } : {}),
-      updated_at: now(),
-    }
-    await write('journal_entries', row)
+    const row = await write('journal_entries', async (tx) => {
+      const cur = await getRow('journal_entries', input.id, tx)
+      if (!cur || cur.deleted_at) throw new Error(`journal entry ${input.id} not found`)
+      return {
+        ...cur,
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.mood !== undefined ? { mood: input.mood } : {}),
+        updated_at: now(),
+      }
+    })
     return row as unknown as JournalEntry
   }
 
   async function deleteJournal(id: string) {
-    const cur = await getRow('journal_entries', id)
-    if (!cur) return
-    const ts = now()
-    await write('journal_entries', { ...cur, deleted_at: ts, updated_at: ts })
+    await write('journal_entries', async (tx) => {
+      const cur = await getRow('journal_entries', id, tx)
+      if (!cur) return null
+      const ts = now()
+      return { ...cur, deleted_at: ts, updated_at: ts }
+    })
   }
 
   async function getMeta(key: string, db: SqlDriver = driver) {
@@ -1036,16 +1142,35 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     )
   }
 
-  /** Move offline data to a signed-in account and queue all of it for upload. */
-  async function claim(fromUserId: string, toUserId: string) {
+  /**
+   * Move offline data to a signed-in account and queue it for upload. The local device only ever
+   * tracks one active local identity's rows at a time (see `resolveUserId` in the mobile app), so every
+   * row is rewritten to `toUserId` unconditionally.
+   *
+   * `pushLocalProfile: true` (new account sign-up): the local profile is rewritten to `toUserId`,
+   * `updated_at` bumped, and queued, so it wins LWW once pushed.
+   *
+   * `pushLocalProfile: false` (sign-in to an existing account): the profile row is rewritten to
+   * `toUserId` locally so the app keeps working until the next pull, but its `updated_at` is NOT
+   * bumped and it is NOT queued — otherwise the device's placeholder profile (empty email, defaults)
+   * would win LWW over the real server profile on push.
+   */
+  async function claim(toUserId: string, opts: { pushLocalProfile: boolean }) {
     await driver.transaction(async (tx) => {
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
-        await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ? WHERE user_id = ?`, [toUserId, now(), fromUserId])
+        await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ?`, [toUserId, now()])
       }
-      await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id = ?', [toUserId, now(), fromUserId])
+      if (opts.pushLocalProfile) {
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ?', [toUserId, now()])
+      } else {
+        await tx.run('UPDATE profiles SET id = ?', [toUserId])
+      }
       await tx.run('DELETE FROM outbox')
       await setMeta(CURSOR_KEY, null, tx)
-      for (const t of ['profiles', 'habits', 'habit_completions', 'journal_entries'] as const) {
+      const tables = opts.pushLocalProfile
+        ? (['profiles', 'habits', 'habit_completions', 'journal_entries'] as const)
+        : (['habits', 'habit_completions', 'journal_entries'] as const)
+      for (const t of tables) {
         const raws = await tx.all<Record<string, SqlParam>>(`SELECT * FROM ${t}`)
         for (const raw of raws) await enqueue(tx, t, fromSqlRow(t, raw))
       }
@@ -1086,11 +1211,11 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
 
 Add `export * from './store'` to `src/index.ts`.
 
-Note on `claim`: the profile is re-queued too, so the server needs the profile to exist before push. Both backends create it at signup (Supabase trigger `handle_new_user`; self-host in Task 12), and `sync_push_for` only updates profiles.
+Note on `claim`: on sign-up (`pushLocalProfile: true`) the local profile is re-queued too, so the server needs the profile to exist before push. Both backends create it at signup (Supabase trigger `handle_new_user`; self-host in Task 12), and `sync_push_for` only updates profiles. On sign-in (`pushLocalProfile: false`) the profile is rewritten locally but not queued, so the account's existing server profile is left alone and wins on the next pull instead of being overwritten by the device's placeholder profile.
 
 - [ ] **Step 4: Run, verify pass**
 
-Run: `npm test --workspace=packages/local-db` → PASS (12 tests: 4 from Task 2, 8 store tests).
+Run: `npm test --workspace=packages/local-db` → PASS (15 tests: 4 from Task 2, 11 store tests).
 Run: `npx tsc --noEmit -p packages/local-db` → no errors.
 Run the timezone matrix once: `for tz in UTC Pacific/Kiritimati Pacific/Pago_Pago America/New_York; do TZ=$tz npm test --workspace=packages/local-db || break; done` → PASS in all four.
 
@@ -2858,7 +2983,7 @@ async function connect(mode: "signin" | "signup") {
     ? await backend.signUp(email, password, name)
     : await backend.signIn(email, password);
   const current = await resolveUserId(store);
-  if (current !== accountId) await store.claim(current, accountId);
+  if (current !== accountId) await store.claim(accountId, { pushLocalProfile: mode === "signup" });
   await store.setMeta("account_user_id", accountId);
   await refreshUserId();
   await syncNow();
@@ -3851,7 +3976,7 @@ Outline only; write a dedicated plan before starting:
 
 - **Clock skew:** LWW uses device clocks, so a phone set 1 h ahead wins conflicts for an hour. That's acceptable for single-user habit data. If it becomes a problem, switch `updated_at` to a hybrid logical clock (HLC) string, which keeps the same comparison semantics.
 - **Completions merge:** the deterministic id plus LWW means that if one device toggles off and another toggles on for the same day, the later tap wins. That's the intended behaviour.
-- **Profiles are update-only via sync:** the server creates the profile at signup, so a push before signup finishes is a no-op, and `claim()` re-queues the profile afterwards.
+- **Profiles are update-only via sync:** the server creates the profile at signup, so a push before signup finishes is a no-op, and `claim(accountId, { pushLocalProfile: true })` re-queues the profile afterwards on sign-up. On sign-in (`pushLocalProfile: false`), the local profile is rewritten but not queued, so the account's real server profile is left alone and wins on the next pull.
 - **`habit_streaks` on Supabase** remains a server cache for the web app only. Mobile never reads it.
 - **Reminders are not context-aware yet:** they fire at the set time even if the habit is already done that day, and `times_per_week` habits are reminded daily. Skipping done days needs per-day one-shot triggers rescheduled after each completion; that is a separate change on top of Task 7's `rebuildReminders`.
 - **Backup import restores deletions:** a backup row replaces a local tombstone (Task 8 import rules), because "restore from backup" is the purpose of the feature. Live local rows that are newer still win.

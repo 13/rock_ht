@@ -21,6 +21,11 @@ const CURSOR_KEY = 'sync_cursor'
 
 const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
+/** Drop keys whose value is `undefined` so a partial input never overwrites a column with null. */
+function filterDefined<T extends object>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
 export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone }: LocalStoreDeps) {
   async function upsert(db: SqlDriver, table: SyncTable, row: SyncRow): Promise<void> {
     const sql = toSqlRow(table, row)
@@ -37,12 +42,22 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     await db.run('INSERT INTO outbox (tbl, row_json) VALUES (?, ?)', [table, JSON.stringify(row)])
   }
 
-  /** Local write: row + outbox snapshot in one transaction. */
-  async function write(table: SyncTable, row: SyncRow): Promise<void> {
+  /**
+   * Local write: `compute` reads the current row (if any) via `tx` and returns the row to persist, or
+   * null for a no-op. The read and the upsert+outbox insert all run inside the same exclusive
+   * transaction, so a concurrent write can't interleave between the read and the write (TOCTOU fix,
+   * review round 1: the previous version read via `driver` before `write` opened its transaction).
+   */
+  async function write(table: SyncTable, compute: (tx: SqlDriver) => Promise<SyncRow | null>): Promise<SyncRow | null> {
+    let result: SyncRow | null = null
     await driver.transaction(async (tx) => {
+      const row = await compute(tx)
+      if (!row) return
       await upsert(tx, table, row)
       await enqueue(tx, table, row)
+      result = row
     })
+    return result
   }
 
   async function getRow(table: SyncTable, id: string, db: SqlDriver = driver): Promise<SyncRow | null> {
@@ -65,24 +80,29 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     return (rows[0] as unknown as ProfileRow) ?? null
   }
 
-  async function ensureProfile(userId: string): Promise<ProfileRow> {
-    const existing = await getProfile(userId)
-    if (existing) return existing
+  function defaultProfileRow(userId: string): SyncRow {
     const ts = now()
-    const row: SyncRow = {
+    return {
       id: userId, email: '', display_name: null, avatar_url: null, timezone: timeZone(), theme: 'dark',
       onboarding_completed: false, time_format: '12h', date_format: 'MM/DD/YYYY',
       created_at: ts, updated_at: ts, deleted_at: null,
     }
+  }
+
+  async function ensureProfile(userId: string): Promise<ProfileRow> {
+    const existing = await getProfile(userId)
+    if (existing) return existing
+    const row = defaultProfileRow(userId)
     // Not queued: the server creates profiles on signup; local edits later are queued.
     await upsert(driver, 'profiles', row)
     return row as unknown as ProfileRow
   }
 
   async function updateProfile(userId: string, input: UpdateProfileInput): Promise<ProfileRow> {
-    const cur = await ensureProfile(userId)
-    const row = { ...(cur as unknown as SyncRow), ...input, updated_at: now() } as SyncRow
-    await write('profiles', row)
+    const row = await write('profiles', async (tx) => {
+      const cur = (await getRow('profiles', userId, tx)) ?? defaultProfileRow(userId)
+      return { ...cur, ...filterDefined(input), updated_at: now() }
+    })
     return row as unknown as ProfileRow
   }
 
@@ -110,30 +130,33 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       reminder_time: input.reminder_time ?? null, reminder_enabled: input.reminder_enabled ?? false,
       is_archived: false, sort_order: 0, created_at: ts, updated_at: ts, deleted_at: null,
     }
-    await write('habits', row)
+    await write('habits', async () => row)
     return toHabit(row)
   }
 
   async function updateHabit(input: UpdateHabitInput) {
-    const cur = await getRow('habits', input.id)
-    if (!cur || cur.deleted_at) throw new Error(`habit ${input.id} not found`)
-    const { id: _id, frequency, ...rest } = input
-    const defined = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined))
-    const row: SyncRow = {
-      ...cur,
-      ...defined,
-      ...(frequency ? { frequency: frequencyToJson(frequency) } : {}),
-      updated_at: now(),
-    }
-    await write('habits', row)
-    return toHabit(row)
+    const row = await write('habits', async (tx) => {
+      const cur = await getRow('habits', input.id, tx)
+      if (!cur || cur.deleted_at) throw new Error(`habit ${input.id} not found`)
+      const { id: _id, frequency, ...rest } = input
+      const defined = filterDefined(rest)
+      return {
+        ...cur,
+        ...defined,
+        ...(frequency ? { frequency: frequencyToJson(frequency) } : {}),
+        updated_at: now(),
+      }
+    })
+    return toHabit(row!)
   }
 
   async function deleteHabit(id: string) {
-    const cur = await getRow('habits', id)
-    if (!cur) return
-    const ts = now()
-    await write('habits', { ...cur, deleted_at: ts, updated_at: ts })
+    await write('habits', async (tx) => {
+      const cur = await getRow('habits', id, tx)
+      if (!cur) return null
+      const ts = now()
+      return { ...cur, deleted_at: ts, updated_at: ts }
+    })
   }
 
   async function listCompletions(
@@ -151,23 +174,27 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
 
   async function setCompletion(userId: string, input: ToggleCompletionInput, done: boolean) {
     const id = completionId(input.habit_id, input.date)
-    const cur = await getRow('habit_completions', id)
-    const ts = now()
-    if (done) {
-      await write('habit_completions', {
-        id, habit_id: input.habit_id, user_id: userId, completed_date: input.date,
-        value: input.value ?? 1, note: input.note ?? cur?.note ?? null,
-        created_at: (cur?.created_at as string) ?? ts, updated_at: ts, deleted_at: null,
-      })
-    } else if (cur && !cur.deleted_at) {
-      await write('habit_completions', { ...cur, deleted_at: ts, updated_at: ts })
-    }
+    await write('habit_completions', async (tx) => {
+      const cur = await getRow('habit_completions', id, tx)
+      const ts = now()
+      if (done) {
+        return {
+          id, habit_id: input.habit_id, user_id: userId, completed_date: input.date,
+          value: input.value ?? 1, note: input.note ?? cur?.note ?? null,
+          created_at: (cur?.created_at as string) ?? ts, updated_at: ts, deleted_at: null,
+        }
+      }
+      if (cur && !cur.deleted_at) return { ...cur, deleted_at: ts, updated_at: ts }
+      return null
+    })
   }
 
   async function setCompletionNote(habitId: string, date: string, note: string) {
-    const cur = await getRow('habit_completions', completionId(habitId, date))
-    if (!cur || cur.deleted_at) return
-    await write('habit_completions', { ...cur, note: note || null, updated_at: now() })
+    await write('habit_completions', async (tx) => {
+      const cur = await getRow('habit_completions', completionId(habitId, date), tx)
+      if (!cur || cur.deleted_at) return null
+      return { ...cur, note: note || null, updated_at: now() }
+    })
   }
 
   async function listJournal(userId: string, opts: { limit?: number; habitId?: string } = {}) {
@@ -186,28 +213,31 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       entry_date: input.entry_date ?? today(), content: input.content, mood: input.mood ?? null,
       created_at: ts, updated_at: ts, deleted_at: null,
     }
-    await write('journal_entries', row)
+    await write('journal_entries', async () => row)
     return row as unknown as JournalEntry
   }
 
   async function updateJournal(input: UpdateJournalEntryInput) {
-    const cur = await getRow('journal_entries', input.id)
-    if (!cur || cur.deleted_at) throw new Error(`journal entry ${input.id} not found`)
-    const row: SyncRow = {
-      ...cur,
-      ...(input.content !== undefined ? { content: input.content } : {}),
-      ...(input.mood !== undefined ? { mood: input.mood } : {}),
-      updated_at: now(),
-    }
-    await write('journal_entries', row)
+    const row = await write('journal_entries', async (tx) => {
+      const cur = await getRow('journal_entries', input.id, tx)
+      if (!cur || cur.deleted_at) throw new Error(`journal entry ${input.id} not found`)
+      return {
+        ...cur,
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.mood !== undefined ? { mood: input.mood } : {}),
+        updated_at: now(),
+      }
+    })
     return row as unknown as JournalEntry
   }
 
   async function deleteJournal(id: string) {
-    const cur = await getRow('journal_entries', id)
-    if (!cur) return
-    const ts = now()
-    await write('journal_entries', { ...cur, deleted_at: ts, updated_at: ts })
+    await write('journal_entries', async (tx) => {
+      const cur = await getRow('journal_entries', id, tx)
+      if (!cur) return null
+      const ts = now()
+      return { ...cur, deleted_at: ts, updated_at: ts }
+    })
   }
 
   async function getMeta(key: string, db: SqlDriver = driver) {
@@ -222,16 +252,35 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     )
   }
 
-  /** Move offline data to a signed-in account and queue all of it for upload. */
-  async function claim(fromUserId: string, toUserId: string) {
+  /**
+   * Move offline data to a signed-in account and queue it for upload. The local device only ever
+   * tracks one active local identity's rows at a time (see `resolveUserId` in the mobile app), so every
+   * row is rewritten to `toUserId` unconditionally.
+   *
+   * `pushLocalProfile: true` (new account sign-up): the local profile is rewritten to `toUserId`,
+   * `updated_at` bumped, and queued, so it wins LWW once pushed.
+   *
+   * `pushLocalProfile: false` (sign-in to an existing account): the profile row is rewritten to
+   * `toUserId` locally so the app keeps working until the next pull, but its `updated_at` is NOT
+   * bumped and it is NOT queued — otherwise the device's placeholder profile (empty email, defaults)
+   * would win LWW over the real server profile on push.
+   */
+  async function claim(toUserId: string, opts: { pushLocalProfile: boolean }) {
     await driver.transaction(async (tx) => {
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
-        await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ? WHERE user_id = ?`, [toUserId, now(), fromUserId])
+        await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ?`, [toUserId, now()])
       }
-      await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id = ?', [toUserId, now(), fromUserId])
+      if (opts.pushLocalProfile) {
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ?', [toUserId, now()])
+      } else {
+        await tx.run('UPDATE profiles SET id = ?', [toUserId])
+      }
       await tx.run('DELETE FROM outbox')
       await setMeta(CURSOR_KEY, null, tx)
-      for (const t of ['profiles', 'habits', 'habit_completions', 'journal_entries'] as const) {
+      const tables = opts.pushLocalProfile
+        ? (['profiles', 'habits', 'habit_completions', 'journal_entries'] as const)
+        : (['habits', 'habit_completions', 'journal_entries'] as const)
+      for (const t of tables) {
         const raws = await tx.all<Record<string, SqlParam>>(`SELECT * FROM ${t}`)
         for (const raw of raws) await enqueue(tx, t, fromSqlRow(t, raw))
       }

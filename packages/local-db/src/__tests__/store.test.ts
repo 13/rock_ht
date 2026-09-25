@@ -64,14 +64,61 @@ describe('LocalStore', () => {
     expect((await s.listJournal(U))[0]!.content).toBe('hi')
   })
 
-  it('claim rewrites user ids and re-queues every row', async () => {
+  it('claim on sign-up pushes the local profile and re-queues every row', async () => {
     await s.ensureProfile(U)
-    await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.createJournal(U, { content: 'hi' })
+    await s.sync.applyRemote([], '7')
     const before = (await s.sync.readOutbox(100)).length
-    await s.claim(U, 'account-1')
+
+    await s.claim('account-1', { pushLocalProfile: true })
+
     expect(await s.listHabits('account-1')).toHaveLength(1)
     expect(await s.getProfile('account-1')).not.toBeNull()
-    expect((await s.sync.readOutbox(100)).length).toBeGreaterThan(before)
+    expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
+    expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
+    const out = await s.sync.readOutbox(100)
+    expect(out.length).toBeGreaterThan(before)
+    expect(out.some((e) => e.change.table === 'profiles')).toBe(true)
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('claim on sign-in keeps the server profile: rewrites it locally without queuing or bumping it', async () => {
+    const original = await s.ensureProfile(U)
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.createJournal(U, { content: 'hi' })
+    await s.sync.applyRemote([], '7')
+
+    await s.claim('account-1', { pushLocalProfile: false })
+
+    const profile = await s.getProfile('account-1')
+    expect(profile).not.toBeNull()
+    expect(profile!.updated_at).toBe(original.updated_at)
+    expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
+    expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
+    const out = await s.sync.readOutbox(100)
+    expect(out.some((e) => e.change.table === 'profiles')).toBe(false)
+    expect(out.some((e) => e.change.table === 'habits')).toBe(true)
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('updateProfile ignores undefined fields instead of nulling them', async () => {
+    const original = await s.ensureProfile(U)
+    const updated = await s.updateProfile(U, { theme: undefined, display_name: 'X' })
+    expect(updated.display_name).toBe('X')
+    expect(updated.theme).toBe(original.theme)
+    expect(await s.getProfile(U)).toMatchObject({ display_name: 'X', theme: original.theme })
+  })
+
+  it('does not lose a completion toggle to a read-before-write race', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await Promise.all([
+      s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true),
+      s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, false),
+    ])
+    expect(await s.listCompletions(U)).toHaveLength(0)
   })
 
   it('dates journal entries with the local calendar date by default', async () => {
