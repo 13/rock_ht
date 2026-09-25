@@ -13,35 +13,24 @@ import { MobileHabitForm } from "@/components/habits/mobile-habit-form";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
-import { useRealtimeSync } from "@/hooks/use-realtime";
-import { useAuth } from "@/providers/supabase-provider";
+import { useStreaks } from "@/hooks/use-streaks";
 import { today } from "@rock_ht/utils";
-import { useQuery } from "@tanstack/react-query";
-import { getStreaks } from "@rock_ht/db";
-import { supabase } from "@/lib/supabase";
 import { hapticMedium } from "@/lib/haptics";
 import type { CreateHabitInput, HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 export default function HabitsScreen() {
-  const { user } = useAuth();
   const router = useRouter();
   const { habits, isLoading, createHabit, updateHabit, archiveHabit, deleteHabit, isCreating } = useHabits();
   const { completedTodayIds, toggleCompletion } = useCompletions();
   const todayStr = today();
 
-  useRealtimeSync();
-
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [editingHabit, setEditingHabit] = useState<HabitWithFrequency | null>(null);
 
-  const { data: streaks } = useQuery({
-    queryKey: ["streaks"],
-    queryFn: () => getStreaks(supabase, user!.id),
-    enabled: !!user,
-  });
+  const { streaks } = useStreaks();
 
   const streakMap = new Map<string, StreakRow>(
-    (streaks ?? []).map((s) => [s.habit_id, s])
+    streaks.map((s) => [s.habit_id, s])
   );
 
   const activeHabits = habits.filter((h) => !h.is_archived);

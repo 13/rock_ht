@@ -13,8 +13,7 @@ import { SwipeableHabitRow } from "@/components/habits/swipeable-habit-row";
 import { StreakRing } from "@/components/habits/streak-ring";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
-import { useRealtimeSync } from "@/hooks/use-realtime";
-import { useAuth } from "@/providers/supabase-provider";
+import { useStreaks } from "@/hooks/use-streaks";
 import {
   filterTodayHabits,
   getDailyProgress,
@@ -23,14 +22,10 @@ import {
   today,
   yesterday,
 } from "@rock_ht/utils";
-import { useQuery } from "@tanstack/react-query";
-import { getStreaks } from "@rock_ht/db";
-import { supabase } from "@/lib/supabase";
 import type { StreakRow } from "@rock_ht/types";
 import { useRouter } from "expo-router";
 
 export default function TodayScreen() {
-  const { user } = useAuth();
   const { habits, isLoading: habitsLoading, deleteHabit } = useHabits();
   const {
     completedTodayIds,
@@ -45,16 +40,10 @@ export default function TodayScreen() {
   const todayStr = today();
   const yesterdayStr = yesterday();
 
-  useRealtimeSync();
-
-  const { data: streaks } = useQuery({
-    queryKey: ["streaks"],
-    queryFn: () => getStreaks(supabase, user!.id),
-    enabled: !!user,
-  });
+  const { streaks } = useStreaks();
 
   const streakMap = new Map<string, StreakRow>(
-    (streaks ?? []).map((s) => [s.habit_id, s])
+    streaks.map((s) => [s.habit_id, s])
   );
 
   const todayHabits = filterTodayHabits(habits);
@@ -63,7 +52,7 @@ export default function TodayScreen() {
     completedTodayIds
   );
 
-  const bestStreak = Math.max(0, ...(streaks ?? []).map((s) => s.current_streak));
+  const bestStreak = Math.max(0, ...streaks.map((s) => s.current_streak));
 
   const missedYesterdayHabits = habits.filter(
     (h) =>

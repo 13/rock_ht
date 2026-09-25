@@ -3,10 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
-import { useAuth } from "@/providers/supabase-provider";
-import { useQuery } from "@tanstack/react-query";
-import { getStreaks } from "@rock_ht/db";
-import { supabase } from "@/lib/supabase";
+import { useStreaks } from "@/hooks/use-streaks";
 import {
   buildCompletionHeatmap,
   completionRate,
@@ -69,25 +66,20 @@ function MiniHeatmap({
 }
 
 export default function AnalyticsScreen() {
-  const { user } = useAuth();
   const { habits } = useHabits();
   const { monthCompletions } = useCompletions();
 
-  const { data: streaks } = useQuery({
-    queryKey: ["streaks"],
-    queryFn: () => getStreaks(supabase, user!.id),
-    enabled: !!user,
-  });
+  const { streaks } = useStreaks();
 
   const activeHabits = habits.filter((h) => !h.is_archived);
   const score = weeklyConsistencyScore(habits, monthCompletions);
   const achievements = checkAchievements({
     habits,
-    streaks: streaks ?? [],
+    streaks,
     completions: monthCompletions,
   });
   const unlockedAchievements = achievements.filter((a) => a.unlocked);
-  const insights = generateInsights(activeHabits, monthCompletions, streaks ?? []);
+  const insights = generateInsights(activeHabits, monthCompletions, streaks);
   const hourData = completionsByHour(monthCompletions);
   const maxHourCount = Math.max(...hourData.map((h) => h.count), 1);
 

@@ -15,16 +15,14 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { useAuth } from "@/providers/supabase-provider";
 import { useHabits } from "@/hooks/use-habits";
+import { useProfile } from "@/hooks/use-profile";
 import {
   requestNotificationPermission,
   scheduleDailyDigest,
 } from "@/lib/notifications";
 import { hapticLight, hapticSuccess, hapticMedium } from "@/lib/haptics";
 import { HABIT_TEMPLATES, TEMPLATE_CATEGORIES } from "@rock_ht/utils";
-import { updateProfile } from "@rock_ht/db";
-import { supabase } from "@/lib/supabase";
 import type { HabitTemplate } from "@rock_ht/utils";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -286,7 +284,7 @@ function DoneStep({ habitCount, onFinish }: { habitCount: number; onFinish: () =
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { updateProfile } = useProfile();
   const { createHabit } = useHabits();
   const [step, setStep] = useState(0);
   const [habitCount, setHabitCount] = useState(0);
@@ -316,11 +314,7 @@ export default function OnboardingScreen() {
   }
 
   async function handleFinish() {
-    if (user) {
-      await updateProfile(supabase as any, user.id, {
-        onboarding_completed: true,
-      });
-    }
+    await updateProfile({ onboarding_completed: true });
     hapticSuccess();
     router.replace("/(tabs)");
   }

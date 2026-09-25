@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@/providers/supabase-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { useNotifications } from "@/hooks/use-notifications";
 import { hapticLight, hapticError } from "@/lib/haptics";
 
@@ -236,13 +236,12 @@ export default function SettingsScreen() {
                 style={{ fontSize: 14, fontWeight: "600", color: "#f4f4f8" }}
                 numberOfLines={1}
               >
-                {user?.email}
+                {user.email ?? "Local profile"}
               </Text>
               <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>
-                Member since{" "}
-                {user?.created_at
-                  ? new Date(user.created_at).getFullYear()
-                  : "—"}
+                {user.email
+                  ? `Member since ${new Date(user.created_at).getFullYear()}`
+                  : "Stored on this device"}
               </Text>
             </View>
           </View>
@@ -289,29 +288,31 @@ export default function SettingsScreen() {
         </SectionCard>
 
         {/* Danger */}
-        <View style={{ marginHorizontal: 20, marginTop: 20 }}>
-          <TouchableOpacity
-            onPress={handleSignOut}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              paddingVertical: 14,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: "#ef444440",
-              backgroundColor: "#ef444410",
-            }}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-            <Text
-              style={{ fontSize: 15, fontWeight: "600", color: "#ef4444" }}
+        {user.email ? (
+          <View style={{ marginHorizontal: 20, marginTop: 20 }}>
+            <TouchableOpacity
+              onPress={handleSignOut}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                paddingVertical: 14,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "#ef444440",
+                backgroundColor: "#ef444410",
+              }}
             >
-              Sign out
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+              <Text
+                style={{ fontSize: 15, fontWeight: "600", color: "#ef4444" }}
+              >
+                Sign out
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         <Text
           style={{

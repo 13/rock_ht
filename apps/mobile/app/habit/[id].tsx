@@ -10,17 +10,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
 import { useHabits } from "@/hooks/use-habits";
-import { useAuth } from "@/providers/supabase-provider";
+import { useStreaks, useHabitCompletions } from "@/hooks/use-streaks";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { MobileHabitForm } from "@/components/habits/mobile-habit-form";
 import { StreakRing } from "@/components/habits/streak-ring";
-import { supabase } from "@/lib/supabase";
-import {
-  getCompletions,
-  getStreaks,
-} from "@rock_ht/db";
 import {
   buildCompletionHeatmap,
   completionRate,
@@ -37,23 +31,14 @@ const DOW_ORDERED = [1, 2, 3, 4, 5, 6, 0]; // Mon first
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuth();
   const { habits, updateHabit, archiveHabit, deleteHabit } = useHabits();
   const [showEditSheet, setShowEditSheet] = useState(false);
 
   const habit = habits.find((h) => h.id === id);
 
-  const { data: completions = [], isLoading: completionsLoading } = useQuery({
-    queryKey: ["completions", "habit", id],
-    queryFn: () => getCompletions(supabase, user!.id, { habitId: id }),
-    enabled: !!user && !!id,
-  });
+  const { data: completions = [], isLoading: completionsLoading } = useHabitCompletions(id);
 
-  const { data: streaks = [] } = useQuery({
-    queryKey: ["streaks"],
-    queryFn: () => getStreaks(supabase, user!.id),
-    enabled: !!user,
-  });
+  const { streaks } = useStreaks();
 
   const streak = streaks.find((s) => s.habit_id === id);
 
