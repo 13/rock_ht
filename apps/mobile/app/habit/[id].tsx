@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Share,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useHabits } from "@/hooks/use-habits";
 import { useStreaks, useHabitCompletions } from "@/hooks/use-streaks";
@@ -31,6 +31,7 @@ const DOW_ORDERED = [1, 2, 3, 4, 5, 6, 0]; // Mon first
 export default function HabitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { habits, updateHabit, archiveHabit, deleteHabit } = useHabits();
   const [showEditSheet, setShowEditSheet] = useState(false);
 
@@ -127,7 +128,7 @@ export default function HabitDetailScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
         {/* Habit identity */}

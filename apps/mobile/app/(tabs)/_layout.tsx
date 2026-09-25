@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -18,6 +18,11 @@ const TABS: {
 ];
 
 export default function TabsLayout() {
+  // Android draws edge-to-edge, so the bar must clear the system navigation
+  // bar (and the iOS home indicator) itself
+  const { bottom } = useSafeAreaInsets();
+  const bottomPadding = Math.max(bottom, 8);
+
   return (
     <Tabs
       screenOptions={{
@@ -28,9 +33,9 @@ export default function TabsLayout() {
           backgroundColor: "#111118",
           borderTopColor: "#1e1e2a",
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === "ios" ? 20 : 8,
+          paddingBottom: bottomPadding,
           paddingTop: 8,
-          height: Platform.OS === "ios" ? 82 : 62,
+          height: 54 + bottomPadding,
         },
         tabBarLabelStyle: {
           fontSize: 11,
