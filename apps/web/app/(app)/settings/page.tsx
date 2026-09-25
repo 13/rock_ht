@@ -16,6 +16,7 @@ import { getAllHabits, getCompletions, createHabit, addCompletion } from "@rock_
 import { createClient } from "@/lib/supabase/client";
 import type { TypedSupabaseClient } from "@rock_ht/db";
 import type { TimeFormat, DateFormat } from "@rock_ht/types";
+import { today } from "@rock_ht/utils";
 
 const TIME_FORMATS: { value: TimeFormat; label: string; example: string }[] = [
   { value: "12h", label: "12-hour", example: "9:30 AM" },
@@ -117,7 +118,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `rock_ht-export-${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `rock_ht-export-${today()}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
