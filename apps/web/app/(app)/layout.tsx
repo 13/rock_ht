@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { TimezoneSync } from "@/components/layout/timezone-sync";
 import { KeyboardShortcutsHelp } from "@/components/ui/keyboard-shortcuts-help";
 import type { ProfileRow } from "@rock_ht/types";
 
@@ -49,6 +50,8 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen">
+      <TimezoneSync userId={user.id} profileTimezone={profile?.timezone} />
+
       {/* Desktop sidebar */}
       <div className="hidden md:block">
         <Sidebar />
