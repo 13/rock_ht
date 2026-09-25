@@ -16,8 +16,6 @@ usage: scripts/build-apk.sh [options]
                       more than one device is attached)
   --abi LIST          reactNativeArchitectures, comma separated
                       (default arm64-v8a; "all" = every ABI in gradle.properties)
-  --allow-dummy-env   build without apps/mobile/.env.local, using dummy
-                      Supabase values (app launches, sign-in fails)
   --clean             gradlew clean first
   -h, --help          this help
 
@@ -41,14 +39,13 @@ ANDROID_DIR="$MOBILE/android"
 DIST="$ROOT/dist"
 EXPECTED_CERT="${ROCK_EXPECTED_CERT_SHA256:-ef46d303232d7394d83b42f117e2c81f1ca5fe7399a22d0ac0d7dda19a60b8f3}"
 
-do_install=0 serial="" abi="arm64-v8a" allow_dummy=0 do_clean=0
+do_install=0 serial="" abi="arm64-v8a" do_clean=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --install)
             do_install=1
             if [ $# -ge 2 ] && [[ "$2" != --* ]]; then serial="$2"; shift; fi ;;
         --abi)             [ $# -ge 2 ] || die "--abi needs a value"; abi="$2"; shift ;;
-        --allow-dummy-env) allow_dummy=1 ;;
         --clean)           do_clean=1 ;;
         -h|--help)         usage; exit 0 ;;
         *) die "unknown option: $1 (see --help)" ;;
@@ -72,18 +69,13 @@ fi
 export ANDROID_KEYSTORE_PASS
 export ANDROID_KEY_PASS="${ANDROID_KEY_PASS:-$ANDROID_KEYSTORE_PASS}"
 
-# ---- app env (EXPO_PUBLIC_* is inlined into the JS bundle at build time) ----
+# ---- app env (optional; EXPO_PUBLIC_* is inlined into the JS bundle) --------
+# The app needs no env to run. .env.local may set EXPO_PUBLIC_SENTRY_DSN.
 if [ -f "$MOBILE/.env.local" ]; then
     set -a
     # shellcheck disable=SC1091
     . "$MOBILE/.env.local"
     set +a
-elif [ "$allow_dummy" = 1 ]; then
-    echo "build-apk: no apps/mobile/.env.local - using dummy Supabase values" >&2
-    export EXPO_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"
-    export EXPO_PUBLIC_SUPABASE_ANON_KEY="dummy-anon-key"
-else
-    die "apps/mobile/.env.local missing (copy .env.local.example, or pass --allow-dummy-env)"
 fi
 
 # ---- toolchain -------------------------------------------------------------

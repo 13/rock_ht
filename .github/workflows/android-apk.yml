@@ -21,8 +21,6 @@ jobs:
       # is hoisted to the root; without this Metro can't inline EXPO_ROUTER_APP_ROOT
       NODE_PATH: ${{ github.workspace }}/apps/mobile/node_modules
       # Inlined into the JS bundle by Metro at build time
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
 
     steps:
