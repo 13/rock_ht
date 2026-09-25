@@ -12,3 +12,10 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# expo-notifications: R8 was obfuscating/stripping members of
+# NotificationsService's inner classes, which broke Bundle/Intent
+# serialization of notification event data (NotSerializableException:
+# org.json.JSONObject) when handling permission grants and notification
+# events, hanging the JS promise that awaits the native response.
+-keep class expo.modules.notifications.** { *; }
