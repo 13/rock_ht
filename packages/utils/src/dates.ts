@@ -102,3 +102,34 @@ export function isSameDayDate(a: string, b: string): boolean {
 export function startOfCurrentDay(): Date {
   return startOfDay(new Date());
 }
+
+/** Today's calendar date (yyyy-MM-dd) in an IANA time zone; falls back to UTC for an invalid zone. */
+export function todayIn(timeZone: string, now: Date = new Date()): string {
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
+
+  const parts = formatter.formatToParts(now);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    throw new Error(`todayIn: unable to resolve date parts for time zone "${timeZone}"`);
+  }
+
+  return `${year}-${month}-${day}`;
+}
