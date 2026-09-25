@@ -101,56 +101,58 @@ export function BottomSheet({
       </Animated.View>
 
       {/* Sheet */}
-      <GestureDetector gesture={panGesture}>
-        <Animated.View
-          style={[
-            sheetStyle,
-            {
-              height: sheetHeight + insets.bottom,
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              right: 0,
-            },
-          ]}
-          className="bg-card rounded-t-3xl shadow-2xl"
-        >
-          {/* Drag handle */}
-          <View className="items-center pt-3 pb-1">
-            <View className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-          </View>
-
-          {/* Header */}
-          {title && (
-            <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border">
-              <Text className="text-lg font-semibold text-foreground">
-                {title}
-              </Text>
-              <TouchableOpacity
-                onPress={close}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text className="text-muted-foreground text-2xl leading-6">
-                  ✕
-                </Text>
-              </TouchableOpacity>
+      <Animated.View
+        style={[
+          sheetStyle,
+          {
+            height: sheetHeight + insets.bottom,
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+          },
+        ]}
+        className="bg-card rounded-t-3xl shadow-2xl"
+      >
+        <GestureDetector gesture={panGesture}>
+          <View>
+            {/* Drag handle */}
+            <View className="items-center pt-3 pb-1">
+              <View className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </View>
-          )}
 
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            {/* Header */}
+            {title && (
+              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border">
+                <Text className="text-lg font-semibold text-foreground">
+                  {title}
+                </Text>
+                <TouchableOpacity
+                  onPress={close}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text className="text-muted-foreground text-2xl leading-6">
+                    ✕
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </GestureDetector>
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           >
-            <ScrollView
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-            >
-              {children}
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </Animated.View>
-      </GestureDetector>
+            {children}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Animated.View>
     </View>
   );
 }
