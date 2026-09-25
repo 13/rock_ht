@@ -1,9 +1,14 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Switch } from "react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PRESET_ICONS, PRESET_COLORS } from "@rock_ht/types";
 import { hapticLight } from "@/lib/haptics";
+import { requestNotificationPermission } from "@/lib/notifications";
 import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"] as const;
@@ -16,7 +21,17 @@ const schema = z.object({
   frequencyType: z.enum(["daily", "specific_days", "times_per_week"]),
   specificDays: z.array(z.number()).optional(),
   timesPerWeek: z.number().min(1).max(7).optional(),
+  reminderEnabled: z.boolean(),
+  reminderTime: z.string().regex(/^\d{2}:\d{2}$/),
 });
+
+/** Builds a `Date` carrying `HH:mm` as local wall-clock time, for the native time picker. */
+function timeStringToDate(time: string): Date {
+  const [hours, minutes] = time.split(":").map(Number);
+  const date = new Date();
+  date.setHours(hours || 0, minutes || 0, 0, 0);
+  return date;
+}
 
 type FormData = z.infer<typeof schema>;
 
@@ -50,6 +65,8 @@ export function MobileHabitForm({
         frequencyType: defaultFreq.type,
         specificDays: defaultSpecificDays,
         timesPerWeek: defaultTimesPerWeek,
+        reminderEnabled: initial?.reminder_enabled ?? false,
+        reminderTime: initial?.reminder_time?.slice(0, 5) ?? "09:00",
       },
     });
 
@@ -58,6 +75,31 @@ export function MobileHabitForm({
   const selectedColor = watch("color");
   const selectedIcon = watch("icon");
   const timesPerWeek = watch("timesPerWeek") ?? 3;
+  const reminderEnabled = watch("reminderEnabled");
+  const reminderTime = watch("reminderTime");
+
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [notificationHint, setNotificationHint] = useState(false);
+
+  async function handleReminderToggle(value: boolean) {
+    hapticLight();
+    setValue("reminderEnabled", value);
+    if (value) {
+      const granted = await requestNotificationPermission();
+      setNotificationHint(!granted);
+    } else {
+      setNotificationHint(false);
+    }
+  }
+
+  function handleTimeChange(event: DateTimePickerEvent, date?: Date) {
+    setShowTimePicker(false);
+    if (event.type === "set" && date) {
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mm = String(date.getMinutes()).padStart(2, "0");
+      setValue("reminderTime", `${hh}:${mm}`);
+    }
+  }
 
   function toggleDay(dayIndex: number) {
     hapticLight();
@@ -83,6 +125,8 @@ export function MobileHabitForm({
       icon: data.icon,
       color: data.color,
       frequency,
+      reminder_enabled: data.reminderEnabled,
+      reminder_time: data.reminderEnabled ? data.reminderTime : undefined,
     });
   }
 
@@ -322,6 +366,66 @@ export function MobileHabitForm({
               </TouchableOpacity>
             ))}
           </View>
+        )}
+      </View>
+
+      {/* Reminder */}
+      <View style={{ marginBottom: 20 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af" }}>
+            Reminder
+          </Text>
+          <Switch
+            value={reminderEnabled}
+            onValueChange={handleReminderToggle}
+            trackColor={{ false: "#2d2d3a", true: selectedColor }}
+            thumbColor="white"
+          />
+        </View>
+
+        {reminderEnabled && (
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setShowTimePicker(true);
+              }}
+              style={{
+                marginTop: 10,
+                alignSelf: "flex-start",
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 20,
+                backgroundColor: "#1e1e2a",
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#f4f4f8" }}>
+                {reminderTime}
+              </Text>
+            </TouchableOpacity>
+
+            {notificationHint && (
+              <Text style={{ color: "#f59e0b", fontSize: 12, marginTop: 8 }}>
+                Enable notifications in your device Settings to receive habit
+                reminders.
+              </Text>
+            )}
+
+            {showTimePicker && (
+              <DateTimePicker
+                mode="time"
+                is24Hour
+                value={timeStringToDate(reminderTime)}
+                onChange={handleTimeChange}
+              />
+            )}
+          </>
         )}
       </View>
 

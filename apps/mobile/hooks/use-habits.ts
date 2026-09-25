@@ -13,9 +13,29 @@ import type {
 
 export const HABITS_KEY = ["habits"] as const;
 
+// A reminder scheduling/cancellation failure must never fail the mutation or roll
+// back the already-applied optimistic UI, so every call here is best-effort.
 async function syncReminder(habit: HabitWithFrequency): Promise<void> {
-  if ((await getNotificationPermissionStatus()) === "granted") await scheduleHabitReminder(habit);
-  else await cancelHabitReminder(habit.id);
+  try {
+    // The OS permission status stands in for the app's global "Habit reminders"
+    // setting: there's no separate persisted toggle, and rebuildRemindersFromStore
+    // (Settings' own resync) gates on this same check.
+    if ((await getNotificationPermissionStatus()) === "granted") {
+      await scheduleHabitReminder(habit);
+    } else {
+      await cancelHabitReminder(habit.id);
+    }
+  } catch (e) {
+    console.warn("[reminders] failed to sync reminder for habit", habit.id, e);
+  }
+}
+
+async function cancelReminderSafely(id: string): Promise<void> {
+  try {
+    await cancelHabitReminder(id);
+  } catch (e) {
+    console.warn("[reminders] failed to cancel reminder for habit", id, e);
+  }
 }
 
 export function useHabits() {
@@ -59,7 +79,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old?.filter((h) => h.id !== id)
       );
-      await cancelHabitReminder(id);
+      await cancelReminderSafely(id);
     },
     onSettled: invalidate,
   });
@@ -70,7 +90,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old?.filter((h) => h.id !== id)
       );
-      await cancelHabitReminder(id);
+      await cancelReminderSafely(id);
     },
     onSettled: invalidate,
   });
