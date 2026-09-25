@@ -144,6 +144,7 @@ function ThemeSwatch({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
   const palette = PALETTES[name];
   return (
     <TouchableOpacity
@@ -171,7 +172,7 @@ function ThemeSwatch({
         style={{
           fontSize: 12,
           fontWeight: active ? "700" : "500",
-          color: active ? "#f4f4f8" : "#9ca3af",
+          color: active ? colors.foreground : colors.textSecondary,
         }}
       >
         {THEME_LABELS[name]}
@@ -191,7 +192,11 @@ export default function SettingsScreen() {
 
   async function handleThemeChange(next: ThemeName) {
     hapticLight();
-    await setTheme(next);
+    try {
+      await setTheme(next);
+    } catch (e) {
+      console.warn("Failed to save theme", e);
+    }
   }
 
   function handleSignOut() {
