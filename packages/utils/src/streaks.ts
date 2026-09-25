@@ -1,4 +1,4 @@
-import type { Frequency, DayCompletion, HabitWithFrequency, CompletionRow } from "@sisigo/types";
+import type { Frequency, DayCompletion, HabitWithFrequency, CompletionRow } from "@rock_ht/types";
 import {
   today,
   parseDate,

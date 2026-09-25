@@ -5,7 +5,7 @@ import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
 import { useAuth } from "@/providers/supabase-provider";
 import { useQuery } from "@tanstack/react-query";
-import { getStreaks } from "@sisigo/db";
+import { getStreaks } from "@rock_ht/db";
 import { supabase } from "@/lib/supabase";
 import {
   buildCompletionHeatmap,
@@ -16,7 +16,7 @@ import {
   completionsByHour,
   RARITY_COLORS,
   today,
-} from "@sisigo/utils";
+} from "@rock_ht/utils";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CELL_SIZE = 10;

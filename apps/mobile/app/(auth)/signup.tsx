@@ -86,7 +86,7 @@ export default function SignupScreen() {
               className="mb-3"
             />
             <Text className="text-2xl font-bold text-foreground tracking-tight">
-              sisiGo
+              rock
             </Text>
           </Animated.View>
 

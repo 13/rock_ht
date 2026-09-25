@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "sisiGo",
-    short_name: "sisiGo",
+    name: "rock habit tracker",
+    short_name: "rock",
     description: "Build habits that stick. One tap, every day.",
     start_url: "/dashboard",
     display: "standalone",

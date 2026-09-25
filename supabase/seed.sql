@@ -1,12 +1,12 @@
 -- ============================================================
--- sisiGo: Development Seed Data
+-- rock: Development Seed Data
 -- ============================================================
 -- This file is for local development only.
 -- Do NOT run in production.
 -- ============================================================
 
 -- Create a test user (requires supabase auth.users entry first)
--- Run: supabase auth create-user test@sisigo.app --password testpass123
+-- Run: supabase auth create-user test@rock-ht.app --password testpass123
 -- Then insert profile manually or let the trigger handle it.
 
 -- Example habits for the test user (replace UUID with actual auth user ID)

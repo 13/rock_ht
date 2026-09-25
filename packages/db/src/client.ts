@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@sisigo/types";
+import type { Database } from "@rock_ht/types";
 
 // Accept any Supabase client — return types in every db function are explicitly
 // typed from our Database definition so callers still get full type safety.

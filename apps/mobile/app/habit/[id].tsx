@@ -20,16 +20,16 @@ import { supabase } from "@/lib/supabase";
 import {
   getCompletions,
   getStreaks,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import {
   buildCompletionHeatmap,
   completionRate,
   completionsByDayOfWeek,
   formatFrequencyLabel,
   formatRelativeDay,
-} from "@sisigo/utils";
+} from "@rock_ht/utils";
 import { hapticMedium, hapticWarning } from "@/lib/haptics";
-import type { CreateHabitInput, HabitWithFrequency } from "@sisigo/types";
+import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const DOW_ORDERED = [1, 2, 3, 4, 5, 6, 0]; // Mon first
@@ -109,7 +109,7 @@ export default function HabitDetailScreen() {
   async function handleShare() {
     hapticMedium();
     const n = streak?.current_streak ?? 0;
-    const text = `${h.icon} ${h.title} — ${n} day streak on sisiGo! Building habits one day at a time. ✨`;
+    const text = `${h.icon} ${h.title} — ${n} day streak on rock! Building habits one day at a time. ✨`;
     await Share.share({ message: text });
   }
 

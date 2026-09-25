@@ -6,8 +6,8 @@ import type {
   HabitWithFrequency,
   TablesInsert,
   TablesUpdate,
-} from "@sisigo/types";
-import { parseFrequency, frequencyToJson } from "@sisigo/utils";
+} from "@rock_ht/types";
+import { parseFrequency, frequencyToJson } from "@rock_ht/utils";
 
 function parseHabitRow(row: HabitRow): HabitWithFrequency {
   return {

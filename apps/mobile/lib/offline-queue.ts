@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const QUEUE_KEY = "sisigo:offline_completions_queue";
+const QUEUE_KEY = "rock_ht:offline_completions_queue";
 
 export interface QueuedCompletion {
   id: string;

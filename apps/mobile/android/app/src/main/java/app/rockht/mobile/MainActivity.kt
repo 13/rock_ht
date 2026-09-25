@@ -1,4 +1,4 @@
-package app.sisigo.mobile
+package app.rockht.mobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

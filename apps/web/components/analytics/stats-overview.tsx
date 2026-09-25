@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import { Flame, CheckCircle2, TrendingUp, Target } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import type { HabitWithFrequency, StreakRow, CompletionRow } from "@sisigo/types";
-import { completionRate } from "@sisigo/utils";
+import type { HabitWithFrequency, StreakRow, CompletionRow } from "@rock_ht/types";
+import { completionRate } from "@rock_ht/utils";
 
 interface StatsOverviewProps {
   habits: HabitWithFrequency[];

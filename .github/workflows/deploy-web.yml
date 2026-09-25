@@ -12,7 +12,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/sisigo-web
+  IMAGE_NAME: ${{ github.repository_owner }}/rock_ht-web
 
 jobs:
   check-secrets:

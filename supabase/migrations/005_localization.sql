@@ -1,5 +1,5 @@
 -- ============================================================
--- sisiGo: Localization preferences on profiles
+-- rock: Localization preferences on profiles
 -- ============================================================
 
 alter table public.profiles

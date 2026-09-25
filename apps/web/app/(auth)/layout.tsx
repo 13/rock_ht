@@ -12,7 +12,7 @@ export default function AuthLayout({
         <div className="flex flex-col items-center mb-8 gap-3">
           <Logo size={56} showText={false} />
           <div className="text-center">
-            <p className="text-2xl font-bold tracking-tight text-foreground">sisiGo</p>
+            <p className="text-2xl font-bold tracking-tight text-foreground">rock</p>
             <p className="text-sm text-muted-foreground mt-1">Build habits that stick</p>
           </div>
         </div>

@@ -1,6 +1,6 @@
-import { today, subtractDays } from "@sisigo/utils";
+import { today, subtractDays } from "@rock_ht/utils";
 import type { TypedSupabaseClient } from "./client";
-import type { CompletionRow, ToggleCompletionInput, TablesInsert } from "@sisigo/types";
+import type { CompletionRow, ToggleCompletionInput, TablesInsert } from "@rock_ht/types";
 
 export async function getCompletions(
   client: TypedSupabaseClient,

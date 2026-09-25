@@ -1,5 +1,5 @@
 {
-  "name": "@sisigo/types",
+  "name": "@rock_ht/types",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",

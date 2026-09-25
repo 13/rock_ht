@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build context must be the repo root:
-#   docker build -f apps/web/Dockerfile -t sisigo-web .
+#   docker build -f apps/web/Dockerfile -t rock_ht-web .
 
 # ─── Stage 1: deps ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS deps

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useHabits } from "@/hooks/use-habits";
 import { useProfile } from "@/hooks/use-profile";
-import { HABIT_TEMPLATES, TEMPLATE_CATEGORIES } from "@sisigo/utils";
-import type { HabitTemplate } from "@sisigo/utils";
+import { HABIT_TEMPLATES, TEMPLATE_CATEGORIES } from "@rock_ht/utils";
+import type { HabitTemplate } from "@rock_ht/utils";
 
 const STEPS = ["welcome", "templates", "done"] as const;
 type Step = (typeof STEPS)[number];
@@ -34,7 +34,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
         ✨
       </motion.div>
       <h1 className="text-4xl font-bold text-foreground mb-4 tracking-tight">
-        Welcome to sisiGo
+        Welcome to rock
       </h1>
       <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
         The simplest way to build habits that stick. One tap, every day.

@@ -10,8 +10,8 @@ import { StreakBadge } from "./streak-badge";
 import { CompletionNoteInput } from "./completion-note-input";
 import { ShareStreakModal } from "./share-streak-modal";
 import { cn } from "@/lib/utils";
-import { formatFrequencyLabel, isStreakAtRisk } from "@sisigo/utils";
-import type { HabitWithFrequency, StreakRow } from "@sisigo/types";
+import { formatFrequencyLabel, isStreakAtRisk } from "@rock_ht/utils";
+import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 interface HabitCardProps {
   habit: HabitWithFrequency;

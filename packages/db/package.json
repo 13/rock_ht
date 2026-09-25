@@ -1,5 +1,5 @@
 {
-  "name": "@sisigo/db",
+  "name": "@rock_ht/db",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -12,12 +12,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@sisigo/utils": "*",
+    "@rock_ht/utils": "*",
     "@supabase/supabase-js": "^2.47.2",
     "date-fns": "^4.1.0"
   },
   "devDependencies": {
-    "@sisigo/types": "*",
+    "@rock_ht/types": "*",
     "typescript": "^5.7.2"
   }
 }

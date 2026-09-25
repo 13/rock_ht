@@ -1,4 +1,4 @@
-import type { CreateHabitInput } from "@sisigo/types";
+import type { CreateHabitInput } from "@rock_ht/types";
 
 export interface HabitTemplate {
   id: string;

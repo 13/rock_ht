@@ -10,13 +10,13 @@ import {
   updateJournalEntry,
   deleteJournalEntry,
   type TypedSupabaseClient,
-} from "@sisigo/db";
-import { today } from "@sisigo/utils";
+} from "@rock_ht/db";
+import { today } from "@rock_ht/utils";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
   UpdateJournalEntryInput,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 
 export const JOURNAL_KEY = ["journal"] as const;
 export const TODAY_JOURNAL_KEY = ["journal", "today"] as const;

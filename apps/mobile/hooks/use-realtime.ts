@@ -8,7 +8,7 @@ import {
   subscribeToStreaks,
   unsubscribe,
   type TypedSupabaseClient,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export function useRealtimeSync() {

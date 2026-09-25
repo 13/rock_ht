@@ -6,7 +6,7 @@ import {
   cancelHabitReminder,
   scheduleTestNotification,
 } from "@/lib/notifications";
-import type { HabitWithFrequency } from "@sisigo/types";
+import type { HabitWithFrequency } from "@rock_ht/types";
 
 export function useNotifications() {
   const [permissionStatus, setPermissionStatus] = useState<string>("undetermined");

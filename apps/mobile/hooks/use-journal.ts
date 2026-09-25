@@ -6,12 +6,12 @@ import {
   createJournalEntry,
   updateJournalEntry,
   deleteJournalEntry,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
   UpdateJournalEntryInput,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 
 export const JOURNAL_KEY = ["journal"] as const;
 

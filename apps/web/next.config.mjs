@@ -45,7 +45,7 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  transpilePackages: ['@sisigo/db', '@sisigo/types', '@sisigo/utils'],
+  transpilePackages: ['@rock_ht/db', '@rock_ht/types', '@rock_ht/utils'],
   images: {
     remotePatterns: [
       {

@@ -11,9 +11,9 @@ import {
   removeCompletion,
   updateCompletionNote,
   type TypedSupabaseClient,
-} from "@sisigo/db";
-import { today, yesterday } from "@sisigo/utils";
-import type { CompletionRow, ToggleCompletionInput } from "@sisigo/types";
+} from "@rock_ht/db";
+import { today, yesterday } from "@rock_ht/utils";
+import type { CompletionRow, ToggleCompletionInput } from "@rock_ht/types";
 
 export const COMPLETIONS_KEY = ["completions"] as const;
 export const TODAY_COMPLETIONS_KEY = ["completions", "today"] as const;

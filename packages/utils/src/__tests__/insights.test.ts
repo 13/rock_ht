@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateInsights, completionsByHour, peakHour } from '../insights'
 import { addDaysToDate } from '../dates'
-import type { HabitWithFrequency, CompletionRow, StreakRow } from '@sisigo/types'
+import type { HabitWithFrequency, CompletionRow, StreakRow } from '@rock_ht/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

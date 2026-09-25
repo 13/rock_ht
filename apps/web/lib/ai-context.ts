@@ -1,5 +1,5 @@
-import type { HabitWithFrequency, StreakRow, CompletionRow } from "@sisigo/types";
-import { weeklyConsistencyScore, completionRate, generateInsights } from "@sisigo/utils";
+import type { HabitWithFrequency, StreakRow, CompletionRow } from "@rock_ht/types";
+import { weeklyConsistencyScore, completionRate, generateInsights } from "@rock_ht/utils";
 
 function scoreLabel(score: number): string {
   if (score >= 90) return "Excellent";
@@ -40,7 +40,7 @@ export function buildCoachSystemPrompt(
 
   const totalCompletions = completions.length;
 
-  return `You are sisiGo AI — a warm, specific, and encouraging habit coach built into the sisiGo app.
+  return `You are rock AI — a warm, specific, and encouraging habit coach built into the rock app.
 
 The user's current habit data:
 Active habits (${active.length}):
@@ -74,7 +74,7 @@ export function buildJournalPromptSystem(
   );
   const score = weeklyConsistencyScore(habits, completions);
 
-  return `You are a journaling prompt generator for sisiGo, a habit tracking app.
+  return `You are a journaling prompt generator for rock, a habit tracking app.
 
 Today's habit data:
 - Completed today: ${todayDone.map((h) => `${h.icon} ${h.title}`).join(", ") || "none yet"}
@@ -96,7 +96,7 @@ export function buildHabitSuggestionsSystem(existingHabits: HabitWithFrequency[]
     .map((h) => `${h.icon} ${h.title}`)
     .join(", ");
 
-  return `You are a habit coach helping a user expand their habit practice in sisiGo.
+  return `You are a habit coach helping a user expand their habit practice in rock.
 
 Their current habits: ${names || "none yet — this is a brand new user"}
 

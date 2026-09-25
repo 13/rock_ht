@@ -32,7 +32,7 @@ apps/web/app/
   favicon.ico               GENERATED 16/32/48 multi-size
   icon.png                  GENERATED 512×512 transparent (Next emits <link rel=icon>)
   apple-icon.png            GENERATED 180×180 opaque #0a0a0f
-  opengraph-image.png       GENERATED 1200×630 rock + "sisiGo" wordmark
+  opengraph-image.png       GENERATED 1200×630 rock + "rock" wordmark
 apps/web/public/
   icons/icon-192.png        GENERATED (manifest.ts already references it)
   icons/icon-512.png        GENERATED
@@ -121,7 +121,7 @@ magick "$CUT" -background none -gravity center \
   -delete 0 "$WEB/app/favicon.ico"
 magick -size 1200x630 "xc:$BG" \
   \( "$CUT" -resize 420x420 \) -gravity center -geometry -250+0 -composite \
-  -fill '#e5e7eb' -font "$FONT_BOLD" -pointsize 110 -gravity center -annotate +230-20 'sisiGo' \
+  -fill '#e5e7eb' -font "$FONT_BOLD" -pointsize 110 -gravity center -annotate +230-20 'rock' \
   -fill '#9ca3af' -font "$FONT" -pointsize 34 -annotate +230+70 'Build habits that stick' \
   "$WEB/app/opengraph-image.png"
 
@@ -202,7 +202,7 @@ interface LogoMarkProps {
   size?: number;
 }
 
-/** The sisiGo rock. Generated from brand/rock.png by brand/generate.sh. */
+/** The rock rock. Generated from brand/rock.png by brand/generate.sh. */
 export function LogoMark({ className, size = 32 }: LogoMarkProps) {
   return (
     <Image
@@ -321,4 +321,4 @@ git commit -m "feat(brand): regenerate Android launcher, splash and notification
 ## Open questions for the user
 
 1. **Accent colour:** keep indigo `#6366f1`, or move the accent to the rock's amber `#f59e0b`? That would touch the Tailwind theme in both apps and the five themes.
-2. **Wordmark on the OG image:** "sisiGo" + "Build habits that stick" in DejaVu Sans, or a brand font? Web typography recommendations in CLAUDE.md point to a modern sans such as Inter.
+2. **Wordmark on the OG image:** "rock" + "Build habits that stick" in DejaVu Sans, or a brand font? Web typography recommendations in CLAUDE.md point to a modern sans such as Inter.

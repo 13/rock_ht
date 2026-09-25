@@ -1,5 +1,5 @@
 -- ============================================================
--- sisiGo: Row Level Security Policies
+-- rock: Row Level Security Policies
 -- ============================================================
 -- Every table is fully locked down: users can only access
 -- their own data. All writes include user_id checks.

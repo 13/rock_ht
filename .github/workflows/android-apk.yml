@@ -56,13 +56,13 @@ jobs:
       - name: Rename APK
         id: apk
         run: |
-          name="sisigo-${GITHUB_REF_NAME//\//-}.apk"
+          name="rock_ht-${GITHUB_REF_NAME//\//-}.apk"
           cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$name"
           echo "path=$name" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sisigo-android-apk
+          name: rock_ht-android-apk
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 

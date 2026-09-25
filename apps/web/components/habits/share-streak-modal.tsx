@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Share2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { HabitWithFrequency, StreakRow } from "@sisigo/types";
+import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 interface ShareStreakModalProps {
   open: boolean;
@@ -24,7 +24,7 @@ function streakLabel(n: number): string {
 }
 
 function shareText(habit: HabitWithFrequency, streak: number): string {
-  return `${habit.icon} ${habit.title} — ${streak} day streak on sisiGo! Building habits one day at a time. ✨`;
+  return `${habit.icon} ${habit.title} — ${streak} day streak on rock! Building habits one day at a time. ✨`;
 }
 
 export function ShareStreakModal({
@@ -47,7 +47,7 @@ export function ShareStreakModal({
     if (!canShare) return;
     try {
       await navigator.share({
-        title: `sisiGo — ${habit.title}`,
+        title: `rock — ${habit.title}`,
         text: shareText(habit, currentStreak),
       });
     } catch {
@@ -98,7 +98,7 @@ export function ShareStreakModal({
                   <p className="font-semibold text-foreground text-base leading-tight">
                     {habit.title}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">sisiGo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">rock</p>
                 </div>
               </div>
 

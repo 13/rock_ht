@@ -1,11 +1,11 @@
 ---
-name: project-sisigo
-description: sisiGo MVP project context - monorepo structure, tech stack, and architecture decisions
+name: project-rock_ht
+description: rock MVP project context - monorepo structure, tech stack, and architecture decisions
 metadata:
   type: project
 ---
 
-sisiGo is a cross-platform habit tracker app built as a monorepo.
+rock is a cross-platform habit tracker app built as a monorepo.
 
 **Why:** Help users build consistency with minimal friction. Philosophy: fast, calm, minimal, emotional.
 

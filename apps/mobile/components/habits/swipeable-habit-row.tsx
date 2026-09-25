@@ -11,8 +11,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { hapticSuccess, hapticMedium, hapticError } from "@/lib/haptics";
-import { isStreakAtRisk } from "@sisigo/utils";
-import type { HabitWithFrequency, StreakRow } from "@sisigo/types";
+import { isStreakAtRisk } from "@rock_ht/utils";
+import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_COMPLETE_THRESHOLD = 72;

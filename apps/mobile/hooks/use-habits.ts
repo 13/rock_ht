@@ -7,7 +7,7 @@ import {
   updateHabit,
   archiveHabit,
   deleteHabit,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import {
   scheduleHabitReminder,
   cancelHabitReminder,
@@ -17,7 +17,7 @@ import type {
   CreateHabitInput,
   HabitWithFrequency,
   UpdateHabitInput,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 
 export const HABITS_KEY = ["habits"] as const;
 

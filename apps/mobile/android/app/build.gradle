@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'app.sisigo.mobile'
+    namespace 'app.rockht.mobile'
     defaultConfig {
-        applicationId 'app.sisigo.mobile'
+        applicationId 'app.rockht.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

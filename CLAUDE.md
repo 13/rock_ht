@@ -1,6 +1,6 @@
 You are a senior product designer, UX architect, and full-stack startup engineer.
 
-Your task is to design and architect a cross-platform habit tracking application called “sisiGo”.
+Your task is to design and architect a cross-platform habit tracking application called “rock” (full name: “rock habit tracker”, identifier: `rock_ht`).
 
 The product must include:
 - A mobile app (iOS + Android)
@@ -10,13 +10,13 @@ The product must include:
 - Modern UI/UX
 - Habit psychology and retention systems
 
-The goal of sisiGo is to help users build consistency with minimal friction.
+The goal of rock is to help users build consistency with minimal friction.
 
 ==================================================
 PRODUCT PHILOSOPHY
 ==================================================
 
-sisiGo should feel:
+rock should feel:
 - Fast
 - Calm
 - Rewarding

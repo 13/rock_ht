@@ -5,8 +5,8 @@ import { motion } from "framer-motion";
 import { Pencil, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { MOOD_EMOJIS, MOOD_LABELS } from "@sisigo/types";
-import type { JournalEntry } from "@sisigo/types";
+import { MOOD_EMOJIS, MOOD_LABELS } from "@rock_ht/types";
+import type { JournalEntry } from "@rock_ht/types";
 
 interface JournalEntryCardProps {
   entry: JournalEntry;

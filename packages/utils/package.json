@@ -1,5 +1,5 @@
 {
-  "name": "@sisigo/utils",
+  "name": "@rock_ht/utils",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -17,7 +17,7 @@
     "date-fns": "^4.1.0"
   },
   "devDependencies": {
-    "@sisigo/types": "*",
+    "@rock_ht/types": "*",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"
   }

@@ -10,7 +10,7 @@ import { useHabits } from "@/hooks/use-habits";
 import { useCompletions } from "@/hooks/use-completions";
 import { useStreaks } from "@/hooks/use-streaks";
 import { useSubscription } from "@/hooks/use-subscription";
-import { weeklyConsistencyScore } from "@sisigo/utils";
+import { weeklyConsistencyScore } from "@rock_ht/utils";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_QUESTIONS = [

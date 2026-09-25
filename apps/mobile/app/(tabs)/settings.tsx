@@ -321,7 +321,7 @@ export default function SettingsScreen() {
             marginTop: 24,
           }}
         >
-          sisiGo v1.0.0
+          rock v1.0.0
         </Text>
       </ScrollView>
     </SafeAreaView>

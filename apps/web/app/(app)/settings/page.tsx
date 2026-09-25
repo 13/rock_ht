@@ -12,10 +12,10 @@ import { useProfile } from "@/hooks/use-profile";
 import { useWebNotifications } from "@/hooks/use-web-notifications";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { getAllHabits, getCompletions, createHabit, addCompletion } from "@sisigo/db";
+import { getAllHabits, getCompletions, createHabit, addCompletion } from "@rock_ht/db";
 import { createClient } from "@/lib/supabase/client";
-import type { TypedSupabaseClient } from "@sisigo/db";
-import type { TimeFormat, DateFormat } from "@sisigo/types";
+import type { TypedSupabaseClient } from "@rock_ht/db";
+import type { TimeFormat, DateFormat } from "@rock_ht/types";
 
 const TIME_FORMATS: { value: TimeFormat; label: string; example: string }[] = [
   { value: "12h", label: "12-hour", example: "9:30 AM" },
@@ -117,7 +117,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sisigo-export-${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `rock_ht-export-${new Date().toISOString().split("T")[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -138,7 +138,7 @@ export default function SettingsPage() {
       const payload = JSON.parse(text);
 
       if (payload.version !== 1 || !Array.isArray(payload.habits)) {
-        throw new Error("Invalid sisiGo export file.");
+        throw new Error("Invalid rock export file.");
       }
 
       const db = asDbClient(createClient());

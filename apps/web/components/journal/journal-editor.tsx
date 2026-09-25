@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MOOD_EMOJIS, MOOD_LABELS } from "@sisigo/types";
-import type { JournalEntry, CreateJournalEntryInput } from "@sisigo/types";
+import { MOOD_EMOJIS, MOOD_LABELS } from "@rock_ht/types";
+import type { JournalEntry, CreateJournalEntryInput } from "@rock_ht/types";
 
 const MOODS = [1, 2, 3, 4, 5] as const;
 

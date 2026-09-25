@@ -3,7 +3,7 @@ import type {
   HabitRow,
   CompletionRow,
   StreakRow,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type HabitChangeCallback = (payload: {

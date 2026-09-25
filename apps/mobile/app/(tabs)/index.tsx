@@ -22,11 +22,11 @@ import {
   isScheduledOn,
   today,
   yesterday,
-} from "@sisigo/utils";
+} from "@rock_ht/utils";
 import { useQuery } from "@tanstack/react-query";
-import { getStreaks } from "@sisigo/db";
+import { getStreaks } from "@rock_ht/db";
 import { supabase } from "@/lib/supabase";
-import type { StreakRow } from "@sisigo/types";
+import type { StreakRow } from "@rock_ht/types";
 import { useRouter } from "expo-router";
 
 export default function TodayScreen() {

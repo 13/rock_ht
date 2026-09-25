@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 import { subDays, format } from "date-fns";
-import type { CompletionRow, HabitWithFrequency } from "@sisigo/types";
-import { filterTodayHabits } from "@sisigo/utils";
+import type { CompletionRow, HabitWithFrequency } from "@rock_ht/types";
+import { filterTodayHabits } from "@rock_ht/utils";
 
 interface WeeklyBarChartProps {
   habits: HabitWithFrequency[];

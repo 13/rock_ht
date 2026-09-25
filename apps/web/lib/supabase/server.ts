@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database } from "@sisigo/types";
+import type { Database } from "@rock_ht/types";
 
 export async function createClient() {
   const cookieStore = await cookies();

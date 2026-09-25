@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useJournal } from "@/hooks/use-journal";
 import { cn } from "@/lib/utils";
-import { MOOD_EMOJIS, MOOD_LABELS } from "@sisigo/types";
-import type { CreateJournalEntryInput, JournalEntry } from "@sisigo/types";
+import { MOOD_EMOJIS, MOOD_LABELS } from "@rock_ht/types";
+import type { CreateJournalEntryInput, JournalEntry } from "@rock_ht/types";
 
 const MOODS = [1, 2, 3, 4, 5] as const;
 

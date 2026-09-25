@@ -5,8 +5,8 @@ import "@/styles/globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: {
-    template: "%s | sisiGo",
-    default: "sisiGo — Build habits that stick",
+    template: "%s | rock",
+    default: "rock habit tracker — Build habits that stick",
   },
   description:
     "The minimal, beautiful habit tracker that keeps you consistent without the noise.",
@@ -15,10 +15,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "sisiGo",
+    title: "rock",
   },
   openGraph: {
-    title: "sisiGo",
+    title: "rock habit tracker",
     description: "Build habits that stick",
     type: "website",
   },

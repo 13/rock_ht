@@ -48,7 +48,7 @@ magick "$CUT" -background none -gravity center \
   -delete 0 -strip "$WEB/app/favicon.ico"
 magick -size 1200x630 "xc:$BG" \
   \( "$CUT" -resize 420x420 \) -gravity center -geometry -250+0 -composite \
-  -fill '#e5e7eb' -font "$FONT_BOLD" -pointsize 110 -gravity center -annotate +230-20 'sisiGo' \
+  -fill '#e5e7eb' -font "$FONT_BOLD" -pointsize 110 -gravity center -annotate +230-20 'rock' \
   -fill '#9ca3af' -font "$FONT" -pointsize 34 -annotate +230+70 'Build habits that stick' \
   -define png:exclude-chunks=date,time "$WEB/app/opengraph-image.png"
 

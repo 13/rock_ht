@@ -5,8 +5,8 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConsistencyScore } from "@/components/analytics/consistency-score";
 import { useAchievements } from "@/hooks/use-achievements";
-import { RARITY_COLORS, RARITY_LABELS } from "@sisigo/utils";
-import type { Achievement } from "@sisigo/utils";
+import { RARITY_COLORS, RARITY_LABELS } from "@rock_ht/utils";
+import type { Achievement } from "@rock_ht/utils";
 import { cn } from "@/lib/utils";
 
 function AchievementBadge({ achievement, index }: { achievement: Achievement; index: number }) {

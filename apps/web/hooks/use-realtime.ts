@@ -10,7 +10,7 @@ import {
   subscribeToStreaks,
   unsubscribe,
   type TypedSupabaseClient,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // Realtime sync: Supabase → invalidate TanStack Query cache.

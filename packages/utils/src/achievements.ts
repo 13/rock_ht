@@ -1,4 +1,4 @@
-import type { HabitWithFrequency, CompletionRow, StreakRow } from "@sisigo/types";
+import type { HabitWithFrequency, CompletionRow, StreakRow } from "@rock_ht/types";
 import { isScheduledOn } from "./streaks";
 
 export type AchievementRarity = "common" | "rare" | "epic" | "legendary";

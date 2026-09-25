@@ -1,5 +1,5 @@
 -- ============================================================
--- sisiGo: Backfill profiles for pre-existing auth users
+-- rock: Backfill profiles for pre-existing auth users
 -- Handles users who signed up before migration 003 was applied.
 -- Safe to run multiple times (ON CONFLICT DO NOTHING).
 -- ============================================================

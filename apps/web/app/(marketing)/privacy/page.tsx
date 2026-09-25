@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export const metadata = { title: 'Privacy Policy — sisiGo' }
+export const metadata = { title: 'Privacy Policy — rock' }
 
 export default function PrivacyPage() {
   const updated = 'July 10, 2026'
@@ -9,7 +9,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-background text-foreground">
       <nav className="flex items-center justify-between px-6 py-4 border-b border-border/50 max-w-3xl mx-auto">
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <span>🌀</span> sisiGo
+          <span>🌀</span> rock
         </Link>
       </nav>
       <article className="max-w-3xl mx-auto px-4 py-12 prose prose-neutral dark:prose-invert">
@@ -17,10 +17,10 @@ export default function PrivacyPage() {
         <p className="text-muted-foreground">Last updated: {updated}</p>
 
         <h2>What we collect</h2>
-        <p>We collect the information you provide when you create an account (email address, display name) and the habit and journal data you enter into sisiGo. We also collect basic usage analytics to improve the product.</p>
+        <p>We collect the information you provide when you create an account (email address, display name) and the habit and journal data you enter into rock. We also collect basic usage analytics to improve the product.</p>
 
         <h2>How we use it</h2>
-        <p>Your data is used solely to operate sisiGo: to store your habits, display your progress, send reminders you configure, and provide AI-powered coaching. We do not sell your personal data to third parties.</p>
+        <p>Your data is used solely to operate rock: to store your habits, display your progress, send reminders you configure, and provide AI-powered coaching. We do not sell your personal data to third parties.</p>
 
         <h2>Third-party services</h2>
         <p>We use the following third-party services:</p>
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
         <p>We use cookies solely for authentication session management. We do not use advertising cookies.</p>
 
         <h2>Contact</h2>
-        <p>For privacy questions, email <a href="mailto:privacy@sisigo.app">privacy@sisigo.app</a>.</p>
+        <p>For privacy questions, email <a href="mailto:privacy@rock-ht.app">privacy@rock-ht.app</a>.</p>
       </article>
     </div>
   )

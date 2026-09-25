@@ -1,5 +1,5 @@
-import type { Frequency, HabitWithFrequency, CreateHabitInput } from "@sisigo/types";
-import type { Json } from "@sisigo/types";
+import type { Frequency, HabitWithFrequency, CreateHabitInput } from "@rock_ht/types";
+import type { Json } from "@rock_ht/types";
 import { today } from "./dates";
 import { isScheduledToday } from "./streaks";
 

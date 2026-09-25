@@ -7,8 +7,8 @@ import {
   getProfile,
   updateProfile,
   type TypedSupabaseClient,
-} from "@sisigo/db";
-import type { ProfileRow, UpdateProfileInput } from "@sisigo/types";
+} from "@rock_ht/db";
+import type { ProfileRow, UpdateProfileInput } from "@rock_ht/types";
 
 export const PROFILE_KEY = ["profile"] as const;
 

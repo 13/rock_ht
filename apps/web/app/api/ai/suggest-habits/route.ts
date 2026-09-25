@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getHabits } from "@sisigo/db";
+import { getHabits } from "@rock_ht/db";
 import { buildHabitSuggestionsSystem } from "@/lib/ai-context";
 import { rateLimit } from "@/lib/rate-limit";
-import type { TypedSupabaseClient } from "@sisigo/db";
+import type { TypedSupabaseClient } from "@rock_ht/db";
 
 export const runtime = "nodejs";
 

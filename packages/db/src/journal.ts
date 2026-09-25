@@ -1,11 +1,11 @@
-import { today } from "@sisigo/utils";
+import { today } from "@rock_ht/utils";
 import type { TypedSupabaseClient } from "./client";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
   UpdateJournalEntryInput,
   TablesInsert,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 
 export async function getJournalEntries(
   client: TypedSupabaseClient,

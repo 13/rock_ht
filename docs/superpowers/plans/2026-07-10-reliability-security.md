@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make sisiGo safe to operate in production: fix the broken auth middleware, add security response headers, rate-limit AI API routes, instrument Sentry for error visibility, and add PostHog for product analytics.
+**Goal:** Make rock safe to operate in production: fix the broken auth middleware, add security response headers, rate-limit AI API routes, instrument Sentry for error visibility, and add PostHog for product analytics.
 
 **Architecture:** Security headers and rate limiting are handled at the middleware/config layer. Sentry captures unhandled exceptions and is initialized server-side in `instrumentation.ts` and client-side in `instrumentation-client.ts`. PostHog is a lightweight client-side event tracker wrapped in a provider. Rate limiting uses a per-process in-memory store (sufficient for single-instance deployments; swap to Upstash Redis for multi-instance).
 
@@ -161,7 +161,7 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  transpilePackages: ['@sisigo/db', '@sisigo/types', '@sisigo/utils'],
+  transpilePackages: ['@rock_ht/db', '@rock_ht/types', '@rock_ht/utils'],
   images: {
     remotePatterns: [
       {

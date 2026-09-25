@@ -1,5 +1,5 @@
 import type { TypedSupabaseClient } from "./client";
-import type { StreakRow, TablesInsert } from "@sisigo/types";
+import type { StreakRow, TablesInsert } from "@rock_ht/types";
 
 export async function getStreaks(
   client: TypedSupabaseClient,

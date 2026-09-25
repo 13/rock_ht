@@ -19,7 +19,7 @@ import {
   completionRate,
   weeklyConsistencyScore,
   generateInsights,
-} from "@sisigo/utils";
+} from "@rock_ht/utils";
 
 export default function AnalyticsPage() {
   const { habits, isLoading: habitsLoading } = useHabits();

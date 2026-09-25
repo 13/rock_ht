@@ -4,7 +4,7 @@
 
 **Goal:** The mobile app works fully offline with no account and no backend, and can optionally sync to either a self-hosted backend (Next.js + Postgres in Docker) or Supabase, chosen at runtime.
 
-**Architecture:** On-device SQLite is the source of truth on mobile. Every local write updates the row and appends a snapshot to an `outbox` table in one transaction. A transport-agnostic sync engine (`@sisigo/sync`) pushes the outbox and pulls remote changes using a monotonic `server_seq` cursor. Rows merge last-write-wins on `updated_at`, and deletes are tombstones (`deleted_at`). Both backends run the same Postgres sync functions (`sync_push_for` / `sync_pull_for`): Supabase exposes them through RPC wrappers that use `auth.uid()`, and the self-hosted Next.js server calls them over `pg` after authenticating the user with Better Auth.
+**Architecture:** On-device SQLite is the source of truth on mobile. Every local write updates the row and appends a snapshot to an `outbox` table in one transaction. A transport-agnostic sync engine (`@rock_ht/sync`) pushes the outbox and pulls remote changes using a monotonic `server_seq` cursor. Rows merge last-write-wins on `updated_at`, and deletes are tombstones (`deleted_at`). Both backends run the same Postgres sync functions (`sync_push_for` / `sync_pull_for`): Supabase exposes them through RPC wrappers that use `auth.uid()`, and the self-hosted Next.js server calls them over `pg` after authenticating the user with Better Auth.
 
 **Tech Stack:** TypeScript, Expo SDK 55 (`expo-sqlite`, `expo-crypto`, `expo-secure-store`), TanStack Query, vitest + better-sqlite3 (tests), Postgres 17, Next.js 16 route handlers, `pg`, Better Auth (+ `@better-auth/expo`), Supabase JS.
 
@@ -16,7 +16,7 @@
 - Supabase stays optional: nothing in `apps/mobile` may read `EXPO_PUBLIC_SUPABASE_*` at import time; Supabase config comes from the runtime sync settings.
 - All timestamps crossing the sync boundary are ISO-8601 UTC strings as produced by `Date.prototype.toISOString()` (e.g. `2026-09-24T20:00:00.000Z`). Adapters normalize with `normalizeTimestamp`.
 - Completion ids are deterministic: `completionId(habit_id, completed_date)` = UUIDv5 with namespace `6d2f3b8e-8c1a-4b7e-9f2d-5a4c3e2b1d0f`. Postgres uses `uuid_generate_v5` with the same namespace.
-- Synced tables: `profiles`, `habits`, `habit_completions`, `journal_entries`. `habit_streaks` is **not** synced; mobile computes streaks with `calculateStreak` from `@sisigo/utils`.
+- Synced tables: `profiles`, `habits`, `habit_completions`, `journal_entries`. `habit_streaks` is **not** synced; mobile computes streaks with `calculateStreak` from `@rock_ht/utils`.
 - Deletes of synced rows are soft (`deleted_at` set, `updated_at` bumped) on every client, including the web app.
 - Existing test command stays green: `npm test --workspace=packages/utils`.
 
@@ -26,8 +26,8 @@ This touches several subsystems. Each phase ends with working, shippable softwar
 
 | Phase | Deliverable | Works without |
 |---|---|---|
-| 1 | `@sisigo/sync` protocol + engine (pure TS, tested) | everything else |
-| 2 | `@sisigo/local-db` SQLite store (tested on Node) | mobile, servers |
+| 1 | `@rock_ht/sync` protocol + engine (pure TS, tested) | everything else |
+| 2 | `@rock_ht/local-db` SQLite store (tested on Node) | mobile, servers |
 | 3 | Mobile runs fully offline on local-db, no login | any backend |
 | 4 | Self-hosted backend in Docker + HTTP sync from mobile | Supabase |
 | 5 | Supabase adapter (migration + RPC remote) + web soft-delete fixes | self-host |
@@ -94,7 +94,7 @@ packages/types/src/database.types.ts MODIFY  new columns
 
 ## Phase 1 — Sync protocol
 
-### Task 1: `@sisigo/sync` package, types, merge rules, completion ids
+### Task 1: `@rock_ht/sync` package, types, merge rules, completion ids
 
 **Files:**
 - Create: `packages/sync/package.json`, `packages/sync/tsconfig.json`, `packages/sync/vitest.config.ts`
@@ -122,7 +122,7 @@ packages/types/src/database.types.ts MODIFY  new columns
 `packages/sync/package.json`:
 ```json
 {
-  "name": "@sisigo/sync",
+  "name": "@rock_ht/sync",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -134,7 +134,7 @@ packages/types/src/database.types.ts MODIFY  new columns
   },
   "dependencies": { "uuid": "^11.1.0" },
   "devDependencies": {
-    "@sisigo/types": "*",
+    "@rock_ht/types": "*",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"
   }
@@ -313,7 +313,7 @@ In `.github/workflows/test.yml`, replace the last step's command:
       - name: Run unit tests
         run: npx turbo run test
 ```
-Run locally: `npx turbo run test`. Expected: `@sisigo/utils` and `@sisigo/sync` both pass.
+Run locally: `npx turbo run test`. Expected: `@rock_ht/utils` and `@rock_ht/sync` both pass.
 
 - [ ] **Step 7: Commit**
 
@@ -511,15 +511,15 @@ git commit -m "feat(sync): add push-then-pull sync engine with cursor paging"
 
 ## Phase 2 — Local SQLite store
 
-### Task 3: `@sisigo/local-db` driver, schema, migrations, codec
+### Task 3: `@rock_ht/local-db` driver, schema, migrations, codec
 
 **Files:**
-- Create: `packages/local-db/package.json`, `tsconfig.json`, `vitest.config.ts` (same shape as Task 1; name `@sisigo/local-db`)
+- Create: `packages/local-db/package.json`, `tsconfig.json`, `vitest.config.ts` (same shape as Task 1; name `@rock_ht/local-db`)
 - Create: `src/driver.ts`, `src/schema.ts`, `src/codec.ts`, `src/index.ts`
 - Test: `src/__tests__/helpers.ts`, `src/__tests__/schema.test.ts`, `src/__tests__/codec.test.ts`
 
 **Interfaces:**
-- Consumes: `SyncTable`, `SyncRow` from `@sisigo/sync`.
+- Consumes: `SyncTable`, `SyncRow` from `@rock_ht/sync`.
 - Produces:
   - `type SqlParam = string | number | null`
   - `interface SqlDriver { exec(sql: string): Promise<void>; run(sql: string, params?: SqlParam[]): Promise<void>; all<T>(sql: string, params?: SqlParam[]): Promise<T[]>; first<T>(sql: string, params?: SqlParam[]): Promise<T | null>; transaction(fn: () => Promise<void>): Promise<void> }`
@@ -534,7 +534,7 @@ git commit -m "feat(sync): add push-then-pull sync engine with cursor paging"
 `packages/local-db/package.json`:
 ```json
 {
-  "name": "@sisigo/local-db",
+  "name": "@rock_ht/local-db",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -545,9 +545,9 @@ git commit -m "feat(sync): add push-then-pull sync engine with cursor paging"
     "test": "vitest run"
   },
   "dependencies": {
-    "@sisigo/sync": "*",
-    "@sisigo/types": "*",
-    "@sisigo/utils": "*"
+    "@rock_ht/sync": "*",
+    "@rock_ht/types": "*",
+    "@rock_ht/utils": "*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
@@ -743,7 +743,7 @@ export async function migrate(driver: SqlDriver): Promise<void> {
 
 `packages/local-db/src/codec.ts`:
 ```ts
-import type { SyncRow, SyncTable } from '@sisigo/sync'
+import type { SyncRow, SyncTable } from '@rock_ht/sync'
 import type { SqlParam } from './driver'
 
 type Kind = 'text' | 'int' | 'bool' | 'json'
@@ -821,7 +821,7 @@ git commit -m "feat(local-db): add SQLite schema, migrations and row codec"
 - Test: `packages/local-db/src/__tests__/store.test.ts`
 
 **Interfaces:**
-- Consumes: `SqlDriver`, `migrate`, `toSqlRow`, `fromSqlRow`, `completionId`, `runSync` types, `parseFrequency`/`frequencyToJson` from `@sisigo/utils`, types from `@sisigo/types`.
+- Consumes: `SqlDriver`, `migrate`, `toSqlRow`, `fromSqlRow`, `completionId`, `runSync` types, `parseFrequency`/`frequencyToJson` from `@rock_ht/utils`, types from `@rock_ht/types`.
 - Produces `createLocalStore(deps: LocalStoreDeps): LocalStore` where:
 ```ts
 interface LocalStoreDeps { driver: SqlDriver; newId: () => string; now: () => string }
@@ -855,7 +855,7 @@ All `list*`/`get*` exclude rows with `deleted_at` set. Every mutation writes the
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { completionId, runSync, type SyncRemote, type SyncChange } from '@sisigo/sync'
+import { completionId, runSync, type SyncRemote, type SyncChange } from '@rock_ht/sync'
 import { migrate } from '../schema'
 import { createLocalStore, type LocalStore } from '../store'
 import { openTestDriver } from './helpers'
@@ -964,12 +964,12 @@ Run: `npm test --workspace=packages/local-db` → FAIL (`../store` missing).
 - [ ] **Step 3: Implement `store.ts`**
 
 ```ts
-import { completionId, type OutboxEntry, type SyncChange, type SyncLocal, type SyncRow, type SyncTable } from '@sisigo/sync'
-import { parseFrequency, frequencyToJson } from '@sisigo/utils'
+import { completionId, type OutboxEntry, type SyncChange, type SyncLocal, type SyncRow, type SyncTable } from '@rock_ht/sync'
+import { parseFrequency, frequencyToJson } from '@rock_ht/utils'
 import type {
   CompletionRow, CreateHabitInput, CreateJournalEntryInput, HabitRow, HabitWithFrequency, JournalEntry,
   ProfileRow, ToggleCompletionInput, UpdateHabitInput, UpdateJournalEntryInput, UpdateProfileInput,
-} from '@sisigo/types'
+} from '@rock_ht/types'
 import { COLUMNS, fromSqlRow, toSqlRow } from './codec'
 import type { SqlDriver, SqlParam } from './driver'
 
@@ -1265,7 +1265,7 @@ git commit -m "feat(local-db): add local store with outbox, tombstones and accou
 - [ ] **Step 1: Add native deps**
 
 Run in `apps/mobile`: `npx expo install expo-sqlite expo-crypto`
-Add to `apps/mobile/package.json` dependencies: `"@sisigo/local-db": "*"`, `"@sisigo/sync": "*"`. Run `npm install` at root.
+Add to `apps/mobile/package.json` dependencies: `"@rock_ht/local-db": "*"`, `"@rock_ht/sync": "*"`. Run `npm install` at root.
 Add `"expo-sqlite"` to `plugins` in `apps/mobile/app.json`.
 
 - [ ] **Step 2: Driver**
@@ -1273,9 +1273,9 @@ Add `"expo-sqlite"` to `plugins` in `apps/mobile/app.json`.
 `apps/mobile/lib/sqlite-driver.ts`:
 ```ts
 import * as SQLite from "expo-sqlite";
-import type { SqlDriver, SqlParam } from "@sisigo/local-db";
+import type { SqlDriver, SqlParam } from "@rock_ht/local-db";
 
-export async function createExpoSqliteDriver(name = "sisigo.db"): Promise<SqlDriver> {
+export async function createExpoSqliteDriver(name = "rock_ht.db"): Promise<SqlDriver> {
   const db = await SQLite.openDatabaseAsync(name);
   await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;");
   return {
@@ -1293,7 +1293,7 @@ export async function createExpoSqliteDriver(name = "sisigo.db"): Promise<SqlDri
 `apps/mobile/lib/local.ts`:
 ```ts
 import * as Crypto from "expo-crypto";
-import { createLocalStore, migrate, type LocalStore } from "@sisigo/local-db";
+import { createLocalStore, migrate, type LocalStore } from "@rock_ht/local-db";
 import { createExpoSqliteDriver } from "./sqlite-driver";
 
 let pending: Promise<LocalStore> | null = null;
@@ -1329,7 +1329,7 @@ export async function resolveUserId(store: LocalStore): Promise<string> {
 `apps/mobile/providers/local-provider.tsx`:
 ```tsx
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import type { LocalStore } from "@sisigo/local-db";
+import type { LocalStore } from "@rock_ht/local-db";
 import { openLocalStore, resolveUserId } from "@/lib/local";
 
 type LocalContext = { store: LocalStore; userId: string; refreshUserId: () => Promise<void> };
@@ -1431,7 +1431,7 @@ git commit -m "feat(mobile): open local SQLite store and provide offline user"
 - Delete: `apps/mobile/lib/offline-queue.ts`
 
 **Interfaces:**
-- Consumes: `useLocal()`, `LocalStore` methods, `calculateStreak` from `@sisigo/utils`.
+- Consumes: `useLocal()`, `LocalStore` methods, `calculateStreak` from `@rock_ht/utils`.
 - Produces (return shapes of existing hooks unchanged):
   - `useHabits()` → `{ habits, isLoading, error, createHabit, updateHabit, archiveHabit, deleteHabit, isCreating }`
   - `useCompletions()` → same as today minus `flushQueue`
@@ -1504,8 +1504,8 @@ export function useHabits() {
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocal } from "@/providers/local-provider";
-import { today, yesterday } from "@sisigo/utils";
-import type { ToggleCompletionInput } from "@sisigo/types";
+import { today, yesterday } from "@rock_ht/utils";
+import type { ToggleCompletionInput } from "@rock_ht/types";
 
 export const TODAY_KEY = ["completions", "today"] as const;
 export const MONTH_KEY = ["completions", "month"] as const;
@@ -1570,8 +1570,8 @@ Local SQLite writes take about 1 ms, so the old optimistic `onMutate` is no long
 
 ```ts
 import { useQuery } from "@tanstack/react-query";
-import { calculateStreak, parseFrequency } from "@sisigo/utils";
-import type { StreakRow } from "@sisigo/types";
+import { calculateStreak, parseFrequency } from "@rock_ht/utils";
+import type { StreakRow } from "@rock_ht/types";
 import { useLocal } from "@/providers/local-provider";
 
 export const STREAKS_KEY = ["streaks"] as const;
@@ -1622,7 +1622,7 @@ Check `parseFrequency` accepts an already-parsed `Frequency` (`packages/utils/sr
 
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { UpdateProfileInput } from "@sisigo/types";
+import type { UpdateProfileInput } from "@rock_ht/types";
 import { useLocal } from "@/providers/local-provider";
 
 export const PROFILE_KEY = ["profile"] as const;
@@ -1687,7 +1687,7 @@ Replace `updateProfile(supabase as any, user.id, {...})` with `await updateProfi
 
 - [ ] **Step 5: `app/_layout.tsx` AuthGuard → OnboardingGuard**
 
-Remove the NetInfo queue-flush effect, and the `supabase`, `@sisigo/db` and offline-queue imports. Replace the guard body:
+Remove the NetInfo queue-flush effect, and the `supabase`, `@rock_ht/db` and offline-queue imports. Replace the guard body:
 ```tsx
 function OnboardingGuard() {
   const { profile, isLoading } = useProfile();
@@ -1715,7 +1715,7 @@ In `app/(tabs)/settings.tsx`, keep the `useAuth()` usage. Hide the "Sign out" ro
 ```bash
 git rm apps/mobile/lib/supabase.ts apps/mobile/providers/supabase-provider.tsx apps/mobile/hooks/use-realtime.ts
 git rm -r "apps/mobile/app/(auth)"
-grep -rn "supabase\|@sisigo/db\|offline-queue\|use-realtime" apps/mobile --include=*.ts --include=*.tsx -l | grep -v node_modules
+grep -rn "supabase\|@rock_ht/db\|offline-queue\|use-realtime" apps/mobile --include=*.ts --include=*.tsx -l | grep -v node_modules
 ```
 Expected: no output.
 
@@ -1852,7 +1852,7 @@ export type SyncConfig =
   | { kind: "selfhost"; baseUrl: string }
   | { kind: "supabase"; url: string; anonKey: string };
 
-const KEY = "sisigo.sync_config";
+const KEY = "rock_ht.sync_config";
 
 export async function loadSyncConfig(): Promise<SyncConfig> {
   const raw = await SecureStore.getItemAsync(KEY);
@@ -1873,7 +1873,7 @@ Install: in `apps/mobile`, `npm install better-auth @better-auth/expo` (use the 
 import * as SecureStore from "expo-secure-store";
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
-import { createHttpRemote, type SyncRemote } from "@sisigo/sync";
+import { createHttpRemote, type SyncRemote } from "@rock_ht/sync";
 import type { SyncConfig } from "./config";
 
 export interface SyncBackend {
@@ -1887,7 +1887,7 @@ export interface SyncBackend {
 function selfHostBackend(baseUrl: string): SyncBackend {
   const auth = createAuthClient({
     baseURL: baseUrl,
-    plugins: [expoClient({ scheme: "sisigo", storagePrefix: "sisigo", storage: SecureStore })],
+    plugins: [expoClient({ scheme: "rock_ht", storagePrefix: "rock_ht", storage: SecureStore })],
   });
   const must = <T,>(r: { data: T | null; error: { message?: string } | null }): T => {
     if (r.error || !r.data) throw new Error(r.error?.message ?? "auth failed");
@@ -1938,7 +1938,7 @@ export async function supabaseBackend(_url: string, _anonKey: string): Promise<S
 
 `apps/mobile/lib/sync/service.ts`:
 ```ts
-import { runSync, type SyncReport } from "@sisigo/sync";
+import { runSync, type SyncReport } from "@rock_ht/sync";
 import { openLocalStore } from "@/lib/local";
 import { loadSyncConfig } from "./config";
 import { createBackend } from "./remote-factory";
@@ -2298,7 +2298,7 @@ function create() {
     database: getPool(),
     emailAndPassword: { enabled: true },
     plugins: [expo()],
-    trustedOrigins: ['sisigo://'],
+    trustedOrigins: ['rockht://'],
     // uuid ids so they fit profiles.id / user_id uuid columns
     advanced: { database: { generateId: () => randomUUID() } },
     databaseHooks: {
@@ -2461,11 +2461,11 @@ describe('sync functions', () => {
 
 Run:
 ```bash
-docker run -d --name sisigo-pg-test -e POSTGRES_PASSWORD=pg -p 55432:5432 \
+docker run -d --name rock_ht-pg-test -e POSTGRES_PASSWORD=pg -p 55432:5432 \
   -v "$PWD/db/selfhost/init:/docker-entrypoint-initdb.d:ro" postgres:17
-until docker exec sisigo-pg-test pg_isready -U postgres; do sleep 1; done
+until docker exec rock_ht-pg-test pg_isready -U postgres; do sleep 1; done
 DATABASE_URL=postgres://postgres:pg@localhost:55432/postgres npm run test:int --workspace=apps/web
-docker rm -f sisigo-pg-test
+docker rm -f rock_ht-pg-test
 ```
 Expected: 3 passing.
 
@@ -2525,7 +2525,7 @@ export function isSupabaseConfigured(): boolean {
 - [ ] **Step 2: Verify the build without env**
 
 ```bash
-docker build -f apps/web/Dockerfile -t sisigo-web:selfhost .
+docker build -f apps/web/Dockerfile -t rock_ht-web:selfhost .
 ```
 Expected: build succeeds with no build-args. (Earlier failure: `@supabase/ssr: Your project's URL and API key are required` while prerendering `/terms`.)
 
@@ -2538,24 +2538,24 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: sisigo
-      POSTGRES_USER: sisigo
+      POSTGRES_DB: rock_ht
+      POSTGRES_USER: rock_ht
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/selfhost/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sisigo -d sisigo"]
+      test: ["CMD-SHELL", "pg_isready -U rock_ht -d rock_ht"]
       interval: 5s
       retries: 10
 
   web:
-    image: ghcr.io/13/sisigo-web:${SISIGO_VERSION:-latest}
+    image: ghcr.io/13/rock_ht-web:${ROCK_HT_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
     environment:
-      DATABASE_URL: postgres://sisigo:${POSTGRES_PASSWORD}@db:5432/sisigo
+      DATABASE_URL: postgres://rock_ht:${POSTGRES_PASSWORD}@db:5432/rock_ht
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${PUBLIC_URL:?set PUBLIC_URL}
     ports:
@@ -2569,8 +2569,8 @@ volumes:
 ```
 POSTGRES_PASSWORD=change-me
 BETTER_AUTH_SECRET=generate-with-openssl-rand-base64-32
-PUBLIC_URL=https://sisigo.example.com
-SISIGO_VERSION=latest
+PUBLIC_URL=https://rock-ht.example.com
+ROCK_HT_VERSION=latest
 ```
 
 - [ ] **Step 4: End-to-end manual check**
@@ -2582,7 +2582,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/sync/pull   #
 ```
 On the phone (APK from Task 7), with existing offline data:
 1. Settings → Sync → Self-hosted → `http://<LAN-IP>:3000` → Create account. Status shows "idle" with a timestamp.
-2. `docker compose exec db psql -U sisigo -c "select title from habits"` lists the offline habits.
+2. `docker compose exec db psql -U rock_ht -c "select title from habits"` lists the offline habits.
 3. Install on a second device or emulator, sign in with the same account: habits and completions appear.
 4. Toggle a habit on device B in airplane mode, reconnect, and pull to refresh on device A: the change shows up.
 
@@ -2638,7 +2638,7 @@ describe('sync SQL parity', () => {
 
 ```sql
 -- ============================================================
--- sisiGo: offline sync (tombstones, LWW timestamps, server_seq)
+-- rock: offline sync (tombstones, LWW timestamps, server_seq)
 -- ============================================================
 create extension if not exists "uuid-ossp" with schema extensions;
 create sequence if not exists public.sync_seq;
@@ -2657,7 +2657,7 @@ alter table public.journal_entries
   add column if not exists deleted_at timestamptz,
   add column if not exists server_seq bigint not null default nextval('public.sync_seq');
 
--- Completions get deterministic ids so offline devices agree (see @sisigo/sync completionId)
+-- Completions get deterministic ids so offline devices agree (see @rock_ht/sync completionId)
 update public.habit_completions
   set id = extensions.uuid_generate_v5('6d2f3b8e-8c1a-4b7e-9f2d-5a4c3e2b1d0f'::uuid, habit_id::text || ':' || completed_date::text);
 alter table public.habit_completions alter column id drop default;
@@ -2714,7 +2714,7 @@ In `packages/db/src`:
 - Every `.from("habits"|"habit_completions"|"journal_entries").select(...)` gets `.is("deleted_at", null)`.
 - `removeCompletion` → `.update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })` instead of `.delete()`.
 - `deleteHabit`, `deleteJournalEntry` → the same soft-delete update.
-- `addCompletion` → `id: completionId(input.habit_id, input.date)`, `updated_at: new Date().toISOString()`, `deleted_at: null` in the upsert (add `@sisigo/sync` to `packages/db/package.json` deps).
+- `addCompletion` → `id: completionId(input.habit_id, input.date)`, `updated_at: new Date().toISOString()`, `deleted_at: null` in the upsert (add `@rock_ht/sync` to `packages/db/package.json` deps).
 - `updateHabit`, `updateJournalEntry`, `updateCompletionNote`, `updateProfile` → include `updated_at: new Date().toISOString()` (the trigger no longer sets it).
 
 Run: `npm run type-check && npm run lint` → green.
@@ -2805,7 +2805,7 @@ Export from `index.ts`. Run `npm test --workspace=packages/sync` → PASS.
 import "react-native-url-polyfill/auto";
 import * as SecureStore from "expo-secure-store";
 import { createClient } from "@supabase/supabase-js";
-import { createSupabaseRemote } from "@sisigo/sync";
+import { createSupabaseRemote } from "@rock_ht/sync";
 import type { SyncBackend } from "./remote-factory";
 
 export async function supabaseBackend(url: string, anonKey: string): Promise<SyncBackend> {

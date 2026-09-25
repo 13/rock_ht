@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuth } from "./use-auth";
-import { getCompletions, type TypedSupabaseClient } from "@sisigo/db";
+import { getCompletions, type TypedSupabaseClient } from "@rock_ht/db";
 
 function asDbClient(s: unknown): TypedSupabaseClient {
   return s as TypedSupabaseClient;

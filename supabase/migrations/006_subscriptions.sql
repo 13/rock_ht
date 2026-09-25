@@ -1,5 +1,5 @@
 -- ============================================================
--- sisiGo: Subscriptions Table
+-- rock: Subscriptions Table
 -- ============================================================
 
 create table public.subscriptions (

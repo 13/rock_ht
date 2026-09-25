@@ -13,7 +13,7 @@ export default async function RootPage() {
       <nav className="flex items-center justify-between px-6 py-4 border-b border-border/50 max-w-6xl mx-auto">
         <div className="flex items-center gap-2 font-bold text-lg">
           <span className="text-2xl">🌀</span>
-          <span>sisiGo</span>
+          <span>rock</span>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -42,7 +42,7 @@ export default async function RootPage() {
           <span className="text-primary">actually stick</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-xl mb-8">
-          sisiGo helps you track habits with beautiful streaks, smart reminders, and an AI coach
+          rock helps you track habits with beautiful streaks, smart reminders, and an AI coach
           that understands your patterns — across all your devices.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
@@ -144,7 +144,7 @@ export default async function RootPage() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>🌀</span>
-            <span>sisiGo © {new Date().getFullYear()}</span>
+            <span>rock © {new Date().getFullYear()}</span>
           </div>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>

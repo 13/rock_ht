@@ -2,8 +2,8 @@
 
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { subtractDays, today, getDayOfWeek, isScheduledOn } from "@sisigo/utils";
-import type { HabitWithFrequency, CompletionRow } from "@sisigo/types";
+import { subtractDays, today, getDayOfWeek, isScheduledOn } from "@rock_ht/utils";
+import type { HabitWithFrequency, CompletionRow } from "@rock_ht/types";
 
 interface WeekInsightCardProps {
   habits: HabitWithFrequency[];

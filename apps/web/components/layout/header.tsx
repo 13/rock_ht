@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "./theme-toggle";
-import { formatDisplayDate } from "@sisigo/utils";
-import { today } from "@sisigo/utils";
+import { formatDisplayDate } from "@rock_ht/utils";
+import { today } from "@rock_ht/utils";
 
 interface HeaderProps {
   title: string;

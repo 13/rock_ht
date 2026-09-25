@@ -13,8 +13,8 @@ import { format, parseISO } from "date-fns";
 import { useJournal } from "@/hooks/use-journal";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { hapticMedium, hapticSuccess, hapticLight } from "@/lib/haptics";
-import { MOOD_EMOJIS, MOOD_LABELS } from "@sisigo/types";
-import type { CreateJournalEntryInput, JournalEntry } from "@sisigo/types";
+import { MOOD_EMOJIS, MOOD_LABELS } from "@rock_ht/types";
+import type { CreateJournalEntryInput, JournalEntry } from "@rock_ht/types";
 
 const MOODS = [1, 2, 3, 4, 5] as const;
 

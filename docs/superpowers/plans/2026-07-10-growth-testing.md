@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a marketing landing page for user acquisition, unit test coverage for all shared utilities, legal pages (privacy + ToS), transactional email on signup, and a CI test job — making sisiGo safe to ship and able to grow organically.
+**Goal:** Add a marketing landing page for user acquisition, unit test coverage for all shared utilities, legal pages (privacy + ToS), transactional email on signup, and a CI test job — making rock safe to ship and able to grow organically.
 
 **Architecture:** The root `/` route becomes a full marketing page for unauthenticated visitors (authenticated users still redirect to `/dashboard`). Legal pages live in a `(marketing)` route group with a minimal layout. Email uses Resend as the transactional provider — a single `POST /api/email/welcome` route is called client-side after successful signup. Unit tests use Vitest (installed in Plan 1); this plan adds test files for the three existing utility modules.
 
@@ -65,7 +65,7 @@ Note which functions are exported. The tests below assume: `isScheduledOn`, `isS
 // packages/utils/src/__tests__/streaks.test.ts
 import { describe, it, expect } from 'vitest'
 import { isScheduledOn, calculateStreak, weeklyConsistencyScore } from '../streaks'
-import type { Frequency } from '@sisigo/types'
+import type { Frequency } from '@rock_ht/types'
 
 const daily: Frequency = { type: 'daily' }
 const weekdays: Frequency = { type: 'specific_days', days: [1, 2, 3, 4, 5] } // Mon-Fri
@@ -414,7 +414,7 @@ jobs:
 
 - [ ] **Step 2: Add test script to root package.json**
 
-In `/home/ben/repo/sisigo/package.json`, add to scripts:
+In `/home/ben/repo/rock_ht/package.json`, add to scripts:
 ```json
 "test": "turbo run test"
 ```
@@ -423,7 +423,7 @@ In `/home/ben/repo/sisigo/package.json`, add to scripts:
 
 Check if `turbo.json` exists:
 ```bash
-ls /home/ben/repo/sisigo/turbo.json 2>/dev/null || echo "no turbo.json"
+ls /home/ben/repo/rock_ht/turbo.json 2>/dev/null || echo "no turbo.json"
 ```
 
 If it exists, add `"test"` to the `pipeline` section. If not, skip this step — turbo will pick it up from package.json scripts.
@@ -475,7 +475,7 @@ export default async function RootPage() {
       <nav className="flex items-center justify-between px-6 py-4 border-b border-border/50 max-w-6xl mx-auto">
         <div className="flex items-center gap-2 font-bold text-lg">
           <span className="text-2xl">🌀</span>
-          <span>sisiGo</span>
+          <span>rock</span>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -504,7 +504,7 @@ export default async function RootPage() {
           <span className="text-primary">actually stick</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-xl mb-8">
-          sisiGo helps you track habits with beautiful streaks, smart reminders, and an AI coach
+          rock helps you track habits with beautiful streaks, smart reminders, and an AI coach
           that understands your patterns — across all your devices.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
@@ -606,7 +606,7 @@ export default async function RootPage() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>🌀</span>
-            <span>sisiGo © {new Date().getFullYear()}</span>
+            <span>rock © {new Date().getFullYear()}</span>
           </div>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
@@ -655,7 +655,7 @@ git commit -m "feat(marketing): add landing page with hero, features, and pricin
 // apps/web/app/(marketing)/privacy/page.tsx
 import Link from 'next/link'
 
-export const metadata = { title: 'Privacy Policy — sisiGo' }
+export const metadata = { title: 'Privacy Policy — rock' }
 
 export default function PrivacyPage() {
   const updated = 'July 10, 2026'
@@ -664,7 +664,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-background text-foreground">
       <nav className="flex items-center justify-between px-6 py-4 border-b border-border/50 max-w-3xl mx-auto">
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <span>🌀</span> sisiGo
+          <span>🌀</span> rock
         </Link>
       </nav>
       <article className="max-w-3xl mx-auto px-4 py-12 prose prose-neutral dark:prose-invert">
@@ -672,10 +672,10 @@ export default function PrivacyPage() {
         <p className="text-muted-foreground">Last updated: {updated}</p>
 
         <h2>What we collect</h2>
-        <p>We collect the information you provide when you create an account (email address, display name) and the habit and journal data you enter into sisiGo. We also collect basic usage analytics to improve the product.</p>
+        <p>We collect the information you provide when you create an account (email address, display name) and the habit and journal data you enter into rock. We also collect basic usage analytics to improve the product.</p>
 
         <h2>How we use it</h2>
-        <p>Your data is used solely to operate sisiGo: to store your habits, display your progress, send reminders you configure, and provide AI-powered coaching. We do not sell your personal data to third parties.</p>
+        <p>Your data is used solely to operate rock: to store your habits, display your progress, send reminders you configure, and provide AI-powered coaching. We do not sell your personal data to third parties.</p>
 
         <h2>Third-party services</h2>
         <p>We use the following third-party services:</p>
@@ -697,7 +697,7 @@ export default function PrivacyPage() {
         <p>We use cookies solely for authentication session management. We do not use advertising cookies.</p>
 
         <h2>Contact</h2>
-        <p>For privacy questions, email <a href="mailto:privacy@sisigo.app">privacy@sisigo.app</a>.</p>
+        <p>For privacy questions, email <a href="mailto:privacy@rock-ht.app">privacy@rock-ht.app</a>.</p>
       </article>
     </div>
   )
@@ -710,7 +710,7 @@ export default function PrivacyPage() {
 // apps/web/app/(marketing)/terms/page.tsx
 import Link from 'next/link'
 
-export const metadata = { title: 'Terms of Service — sisiGo' }
+export const metadata = { title: 'Terms of Service — rock' }
 
 export default function TermsPage() {
   const updated = 'July 10, 2026'
@@ -719,7 +719,7 @@ export default function TermsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <nav className="flex items-center justify-between px-6 py-4 border-b border-border/50 max-w-3xl mx-auto">
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <span>🌀</span> sisiGo
+          <span>🌀</span> rock
         </Link>
       </nav>
       <article className="max-w-3xl mx-auto px-4 py-12 prose prose-neutral dark:prose-invert">
@@ -727,34 +727,34 @@ export default function TermsPage() {
         <p className="text-muted-foreground">Last updated: {updated}</p>
 
         <h2>Acceptance</h2>
-        <p>By using sisiGo you agree to these terms. If you do not agree, do not use the service.</p>
+        <p>By using rock you agree to these terms. If you do not agree, do not use the service.</p>
 
         <h2>Description of service</h2>
-        <p>sisiGo is a habit tracking application. We provide the service on an "as is" basis and may modify, suspend, or discontinue features at any time.</p>
+        <p>rock is a habit tracking application. We provide the service on an "as is" basis and may modify, suspend, or discontinue features at any time.</p>
 
         <h2>Your account</h2>
-        <p>You are responsible for maintaining the security of your account. Notify us immediately if you suspect unauthorized access. You must be at least 13 years old to use sisiGo.</p>
+        <p>You are responsible for maintaining the security of your account. Notify us immediately if you suspect unauthorized access. You must be at least 13 years old to use rock.</p>
 
         <h2>Acceptable use</h2>
-        <p>You may not use sisiGo to violate any laws, infringe intellectual property rights, distribute malware, or attempt to gain unauthorized access to our systems or other users' accounts.</p>
+        <p>You may not use rock to violate any laws, infringe intellectual property rights, distribute malware, or attempt to gain unauthorized access to our systems or other users' accounts.</p>
 
         <h2>Subscriptions and billing</h2>
         <p>The Free plan is free indefinitely. The Pro plan is billed monthly. You may cancel at any time from Settings; your Pro access continues until the end of the current billing period. We do not offer refunds for partial months.</p>
 
         <h2>Data and content</h2>
-        <p>You own the data you enter into sisiGo. By using the service you grant us a limited license to store, process, and display your data in order to provide the service. We do not claim ownership of your content.</p>
+        <p>You own the data you enter into rock. By using the service you grant us a limited license to store, process, and display your data in order to provide the service. We do not claim ownership of your content.</p>
 
         <h2>Termination</h2>
         <p>We may suspend or terminate your account if you violate these terms. You may delete your account at any time from Settings.</p>
 
         <h2>Limitation of liability</h2>
-        <p>To the maximum extent permitted by law, sisiGo is not liable for indirect, incidental, or consequential damages. Our total liability to you for any claim is limited to the amount you paid us in the 12 months prior to the claim.</p>
+        <p>To the maximum extent permitted by law, rock is not liable for indirect, incidental, or consequential damages. Our total liability to you for any claim is limited to the amount you paid us in the 12 months prior to the claim.</p>
 
         <h2>Governing law</h2>
-        <p>These terms are governed by the laws of the jurisdiction in which sisiGo operates, without regard to conflict-of-law provisions.</p>
+        <p>These terms are governed by the laws of the jurisdiction in which rock operates, without regard to conflict-of-law provisions.</p>
 
         <h2>Contact</h2>
-        <p>Questions about these terms? Email <a href="mailto:legal@sisigo.app">legal@sisigo.app</a>.</p>
+        <p>Questions about these terms? Email <a href="mailto:legal@rock-ht.app">legal@rock-ht.app</a>.</p>
       </article>
     </div>
   )
@@ -853,12 +853,12 @@ export async function POST() {
   const { error } = await resend.emails.send({
     from: process.env.FROM_EMAIL!,
     to: user.email,
-    subject: 'Welcome to sisiGo 🌀',
+    subject: 'Welcome to rock 🌀',
     html: `
       <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
         <h1 style="font-size: 24px; margin-bottom: 8px;">Welcome, ${name}! 🎉</h1>
         <p style="color: #666; line-height: 1.6; margin-bottom: 16px;">
-          Your sisiGo account is ready. Start building habits that stick.
+          Your rock account is ready. Start building habits that stick.
         </p>
         <p style="margin-bottom: 16px;">Here's how to get started:</p>
         <ol style="color: #333; line-height: 2;">
@@ -868,10 +868,10 @@ export async function POST() {
         </ol>
         <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard"
            style="display: inline-block; margin-top: 24px; background: #6366f1; color: white; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 600;">
-          Open sisiGo →
+          Open rock →
         </a>
         <p style="margin-top: 32px; font-size: 12px; color: #999;">
-          You're receiving this because you signed up at sisigo.app.
+          You're receiving this because you signed up at rock-ht.app.
           <a href="${process.env.NEXT_PUBLIC_APP_URL}/settings" style="color: #999;">Manage notifications</a>
         </p>
       </div>

@@ -16,9 +16,9 @@ import { useCompletions } from "@/hooks/use-completions";
 import { useStreaks } from "@/hooks/use-streaks";
 import { useRealtimeSync } from "@/hooks/use-realtime";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { today } from "@sisigo/utils";
+import { today } from "@rock_ht/utils";
 import { cn } from "@/lib/utils";
-import type { CreateHabitInput, HabitWithFrequency } from "@sisigo/types";
+import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 
 type Tab = "active" | "archived";
 

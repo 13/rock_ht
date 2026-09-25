@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { subDays, addDays, format, parseISO, getDay } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { DayCompletion } from "@sisigo/types";
+import type { DayCompletion } from "@rock_ht/types";
 
 interface CalendarHeatmapProps {
   data: DayCompletion[];

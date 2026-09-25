@@ -2,9 +2,9 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PRESET_ICONS, PRESET_COLORS } from "@sisigo/types";
+import { PRESET_ICONS, PRESET_COLORS } from "@rock_ht/types";
 import { hapticLight } from "@/lib/haptics";
-import type { CreateHabitInput, HabitWithFrequency } from "@sisigo/types";
+import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 

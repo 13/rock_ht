@@ -22,10 +22,10 @@ import {
   scheduleDailyDigest,
 } from "@/lib/notifications";
 import { hapticLight, hapticSuccess, hapticMedium } from "@/lib/haptics";
-import { HABIT_TEMPLATES, TEMPLATE_CATEGORIES } from "@sisigo/utils";
-import { updateProfile } from "@sisigo/db";
+import { HABIT_TEMPLATES, TEMPLATE_CATEGORIES } from "@rock_ht/utils";
+import { updateProfile } from "@rock_ht/db";
 import { supabase } from "@/lib/supabase";
-import type { HabitTemplate } from "@sisigo/utils";
+import type { HabitTemplate } from "@rock_ht/utils";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const STEPS = 4;
@@ -37,7 +37,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
       <Text style={{ fontSize: 80, marginBottom: 32 }}>✨</Text>
       <Text style={{ fontSize: 32, fontWeight: "800", color: "#f4f4f8", textAlign: "center", marginBottom: 12, letterSpacing: -0.5 }}>
-        Welcome to{"\n"}sisiGo
+        Welcome to{"\n"}rock
       </Text>
       <Text style={{ fontSize: 16, color: "#9ca3af", textAlign: "center", lineHeight: 24, marginBottom: 40 }}>
         The simplest way to build habits that stick. One tap, every day.

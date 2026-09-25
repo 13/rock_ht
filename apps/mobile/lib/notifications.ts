@@ -74,7 +74,7 @@ export async function cancelAllReminders(): Promise<void> {
 export async function scheduleTestNotification(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "✨ sisiGo",
+      title: "✨ rock",
       body: "Notifications are working! Keep building those habits.",
     },
     trigger: {
@@ -90,7 +90,7 @@ export async function getAllScheduledReminders(): Promise<
   return Notifications.getAllScheduledNotificationsAsync();
 }
 
-const DIGEST_IDENTIFIER_KEY = "sisigo-daily-digest";
+const DIGEST_IDENTIFIER_KEY = "rock_ht-daily-digest";
 
 export async function scheduleDailyDigest(
   hour = 20,

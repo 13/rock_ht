@@ -6,7 +6,7 @@ interface LogoMarkProps {
   size?: number;
 }
 
-/** The sisiGo rock. Generated from brand/rock.png by brand/generate.sh. */
+/** The rock rock. Generated from brand/rock.png by brand/generate.sh. */
 export function LogoMark({ className, size = 32 }: LogoMarkProps) {
   return (
     <Image
@@ -34,7 +34,7 @@ export function Logo({ className, size = 32, showText = true, textClassName }: L
       <LogoMark size={size} />
       {showText && (
         <span className={cn("font-bold tracking-tight text-foreground", textClassName)}>
-          sisiGo
+          rock
         </span>
       )}
     </div>

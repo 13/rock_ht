@@ -3,8 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuth } from "./use-auth";
-import { getStreaks, type TypedSupabaseClient } from "@sisigo/db";
-import type { StreakRow } from "@sisigo/types";
+import { getStreaks, type TypedSupabaseClient } from "@rock_ht/db";
+import type { StreakRow } from "@rock_ht/types";
 
 export const STREAKS_KEY = ["streaks"] as const;
 

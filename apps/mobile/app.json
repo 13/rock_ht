@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "sisiGo",
-    "slug": "sisigo",
+    "name": "rock",
+    "slug": "rock_ht",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "sisigo",
+    "scheme": "rockht",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "cover",
@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.sisigo.mobile",
+      "bundleIdentifier": "app.rockht.mobile",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -30,7 +30,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0f"
       },
-      "package": "app.sisigo.mobile",
+      "package": "app.rockht.mobile",
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",

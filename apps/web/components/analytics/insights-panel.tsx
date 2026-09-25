@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import type { HabitInsight, InsightType } from "@sisigo/utils";
+import type { HabitInsight, InsightType } from "@rock_ht/utils";
 
 const TYPE_STYLES: Record<InsightType, { border: string; bg: string; text: string }> = {
   strength: {

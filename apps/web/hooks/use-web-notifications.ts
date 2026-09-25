@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { HabitWithFrequency } from "@sisigo/types";
+import type { HabitWithFrequency } from "@rock_ht/types";
 
 export function useWebNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>("default");

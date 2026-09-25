@@ -8,12 +8,12 @@ import { Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useHabits } from "@/hooks/use-habits";
-import { PRESET_ICONS, PRESET_COLORS } from "@sisigo/types";
+import { PRESET_ICONS, PRESET_COLORS } from "@rock_ht/types";
 import type {
   CreateHabitInput,
   HabitWithFrequency,
   Frequency,
-} from "@sisigo/types";
+} from "@rock_ht/types";
 
 const schema = z.object({
   title: z.string().min(1, "Habit name is required").max(60, "Too long"),

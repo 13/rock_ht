@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isScheduledOn, calculateStreak, weeklyConsistencyScore } from '../streaks'
 import { subtractDays, today } from '../dates'
-import type { Frequency, HabitWithFrequency, CompletionRow } from '@sisigo/types'
+import type { Frequency, HabitWithFrequency, CompletionRow } from '@rock_ht/types'
 
 // ─── Frequency fixtures ───────────────────────────────────────────────────────
 

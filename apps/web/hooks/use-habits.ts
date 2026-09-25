@@ -13,13 +13,13 @@ import {
   deleteHabit,
   reorderHabits,
   type TypedSupabaseClient,
-} from "@sisigo/db";
+} from "@rock_ht/db";
 import type {
   CreateHabitInput,
   HabitWithFrequency,
   UpdateHabitInput,
-} from "@sisigo/types";
-import { habitLimitForPlan } from "@sisigo/utils";
+} from "@rock_ht/types";
+import { habitLimitForPlan } from "@rock_ht/utils";
 
 export const HABITS_KEY = ["habits"] as const;
 

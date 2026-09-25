@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { checkAchievements } from '../achievements'
 import type { AchievementInput } from '../achievements'
-import type { HabitWithFrequency, CompletionRow } from '@sisigo/types'
+import type { HabitWithFrequency, CompletionRow } from '@rock_ht/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

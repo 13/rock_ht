@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { Database } from "@sisigo/types";
+import type { Database } from "@rock_ht/types";
 
 export function createClient() {
   return createBrowserClient<Database>(

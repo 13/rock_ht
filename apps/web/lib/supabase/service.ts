@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@sisigo/types'
+import type { Database } from '@rock_ht/types'
 
 export function createServiceClient() {
   return createClient<Database>(

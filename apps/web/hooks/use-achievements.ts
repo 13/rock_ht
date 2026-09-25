@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useHabits } from "./use-habits";
 import { useStreaks } from "./use-streaks";
 import { useCompletions } from "./use-completions";
-import { checkAchievements, weeklyConsistencyScore } from "@sisigo/utils";
+import { checkAchievements, weeklyConsistencyScore } from "@rock_ht/utils";
 
 export function useAchievements() {
   const { habits } = useHabits();

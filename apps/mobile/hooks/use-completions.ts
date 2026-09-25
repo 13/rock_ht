@@ -8,14 +8,14 @@ import {
   getLast30DaysCompletions,
   addCompletion,
   removeCompletion,
-} from "@sisigo/db";
-import { today, yesterday } from "@sisigo/utils";
+} from "@rock_ht/db";
+import { today, yesterday } from "@rock_ht/utils";
 import {
   enqueueCompletion,
   getQueue,
   removeFromQueue,
 } from "@/lib/offline-queue";
-import type { CompletionRow, ToggleCompletionInput } from "@sisigo/types";
+import type { CompletionRow, ToggleCompletionInput } from "@rock_ht/types";
 
 export const TODAY_KEY = ["completions", "today"] as const;
 export const MONTH_KEY = ["completions", "month"] as const;

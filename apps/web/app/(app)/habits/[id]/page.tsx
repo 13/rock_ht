@@ -26,11 +26,11 @@ import {
   completionsByDayOfWeek,
   formatFrequencyLabel,
   formatRelativeDay,
-} from "@sisigo/utils";
+} from "@rock_ht/utils";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import type { JournalEntry } from "@sisigo/types";
+import type { JournalEntry } from "@rock_ht/types";
 
 export default function HabitDetailPage({
   params,

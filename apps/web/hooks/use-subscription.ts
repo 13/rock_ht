@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
-import type { Plan } from '@sisigo/utils'
+import type { Plan } from '@rock_ht/utils'
 
 export function useSubscription() {
   const { data, isLoading } = useQuery({

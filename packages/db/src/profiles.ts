@@ -1,5 +1,5 @@
 import type { TypedSupabaseClient } from "./client";
-import type { ProfileRow, UpdateProfileInput, TablesInsert } from "@sisigo/types";
+import type { ProfileRow, UpdateProfileInput, TablesInsert } from "@rock_ht/types";
 
 export async function getProfile(
   client: TypedSupabaseClient,

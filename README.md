@@ -1,4 +1,4 @@
-# sisiGo
+# rock habit tracker
 
 A cross-platform habit tracker with real-time sync, AI coaching, and streak analytics.
 
@@ -40,7 +40,7 @@ A cross-platform habit tracker with real-time sync, AI coaching, and streak anal
 ## Project structure
 
 ```
-sisigo/
+rock_ht/
 ├── apps/
 │   ├── web/          # Next.js web app
 │   └── mobile/       # Expo React Native app
@@ -63,8 +63,8 @@ sisigo/
 
 ```bash
 # 1. Clone
-git clone https://github.com/your-org/sisigo.git
-cd sisigo
+git clone https://github.com/your-org/rock_ht.git
+cd rock_ht
 
 # 2. Install all workspace dependencies
 npm install
@@ -274,7 +274,7 @@ The web app ships as a self-contained Docker image using Next.js [standalone out
 ### Build the image
 
 ```bash
-docker build -f apps/web/Dockerfile -t sisigo-web .
+docker build -f apps/web/Dockerfile -t rock_ht-web .
 ```
 
 The build context is the **repo root** so the shared packages are available.
@@ -288,7 +288,7 @@ docker run -p 3000:3000 \
   -e SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
   -e NEXT_PUBLIC_APP_URL=https://yourdomain.com \
   -e ANTHROPIC_API_KEY=sk-ant-... \
-  sisigo-web
+  rock_ht-web
 ```
 
 ### Docker Compose (local full-stack)
@@ -320,10 +320,10 @@ Services started:
 
 ```bash
 # Build
-docker build -f apps/web/Dockerfile -t ghcr.io/your-org/sisigo-web:latest .
+docker build -f apps/web/Dockerfile -t ghcr.io/your-org/rock_ht-web:latest .
 
 # Push
-docker push ghcr.io/your-org/sisigo-web:latest
+docker push ghcr.io/your-org/rock_ht-web:latest
 ```
 
 Then deploy the image to any container platform, passing env vars via platform secrets.

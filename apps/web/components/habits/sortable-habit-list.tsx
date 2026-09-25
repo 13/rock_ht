@@ -21,7 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { HabitCard } from "./habit-card";
 import { cn } from "@/lib/utils";
-import type { HabitWithFrequency, StreakRow } from "@sisigo/types";
+import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 interface SortableHabitItemProps {
   habit: HabitWithFrequency;

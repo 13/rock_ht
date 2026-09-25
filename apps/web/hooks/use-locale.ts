@@ -2,7 +2,7 @@
 
 import { format, parseISO } from "date-fns";
 import { useProfile } from "./use-profile";
-import type { DateFormat, TimeFormat } from "@sisigo/types";
+import type { DateFormat, TimeFormat } from "@rock_ht/types";
 
 const DATE_FNS_FORMAT: Record<DateFormat, string> = {
   "DD.MM.YYYY": "dd.MM.yyyy",

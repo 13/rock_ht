@@ -26,8 +26,8 @@ import {
   isScheduledOn,
   today,
   yesterday,
-} from "@sisigo/utils";
-import type { CreateHabitInput, HabitWithFrequency } from "@sisigo/types";
+} from "@rock_ht/utils";
+import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
 
 export default function DashboardPage() {
   const {

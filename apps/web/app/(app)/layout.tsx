@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { KeyboardShortcutsHelp } from "@/components/ui/keyboard-shortcuts-help";
-import type { ProfileRow } from "@sisigo/types";
+import type { ProfileRow } from "@rock_ht/types";
 
 export default async function AppLayout({
   children,

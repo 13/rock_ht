@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add Stripe subscription billing with Pro tier gating and Google OAuth so sisiGo can charge users.
+**Goal:** Add Stripe subscription billing with Pro tier gating and Google OAuth so rock can charge users.
 
 **Architecture:** A `subscriptions` table (one row per user, auto-seeded as `free`) is managed by a Stripe webhook handler (service-role only). The `use-subscription` hook exposes `isPro` to all client components. Free tier is capped at 5 habits and no AI features; Pro unlocks everything.
 
@@ -261,7 +261,7 @@ create trigger set_subscriptions_updated_at
 - [ ] **Step 2: Apply migration locally**
 
 ```bash
-cd /path/to/sisigo && npm run db:reset
+cd /path/to/rock_ht && npm run db:reset
 ```
 
 Expected: Supabase resets and applies all 6 migrations without error.
@@ -355,7 +355,7 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 ```typescript
 // apps/web/lib/supabase/service.ts
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@sisigo/types'
+import type { Database } from '@rock_ht/types'
 
 export function createServiceClient() {
   return createClient<Database>(
@@ -658,7 +658,7 @@ git commit -m "feat(billing): add Stripe billing portal route"
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
-import type { Plan } from '@sisigo/utils'
+import type { Plan } from '@rock_ht/utils'
 
 export function useSubscription() {
   const { data, isLoading } = useQuery({
@@ -710,7 +710,7 @@ git commit -m "feat(billing): add useSubscription hook"
 - Modify: `apps/web/app/(app)/coach/page.tsx` — gate behind `isPro`
 
 **Interfaces:**
-- Consumes: `useSubscription()` from `./use-subscription`, `habitLimitForPlan` from `@sisigo/utils`
+- Consumes: `useSubscription()` from `./use-subscription`, `habitLimitForPlan` from `@rock_ht/utils`
 - Produces: `useHabits()` now additionally returns `isAtHabitLimit: boolean`
 
 - [ ] **Step 1: Open apps/web/hooks/use-habits.ts and add the limit check**
@@ -720,7 +720,7 @@ Find the return statement of `useHabits()` and add:
 ```typescript
 // Near the top of the hook, add import:
 import { useSubscription } from './use-subscription'
-import { habitLimitForPlan } from '@sisigo/utils'
+import { habitLimitForPlan } from '@rock_ht/utils'
 
 // Inside useHabits(), before the return:
 const { plan } = useSubscription()
@@ -1010,4 +1010,4 @@ git commit -m "feat(auth): add Google OAuth to login and signup pages"
 
 **Placeholder scan:** No TBDs or TODOs found.
 
-**Type consistency:** `Plan` type used consistently from `@sisigo/utils`. `SubscriptionRow` from `@sisigo/types`. `planAllows` and `habitLimitForPlan` match between test and implementation.
+**Type consistency:** `Plan` type used consistently from `@rock_ht/utils`. `SubscriptionRow` from `@rock_ht/types`. `planAllows` and `habitLimitForPlan` match between test and implementation.

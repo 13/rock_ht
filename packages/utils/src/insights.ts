@@ -1,5 +1,5 @@
 import { format, parseISO, subDays } from "date-fns";
-import type { HabitWithFrequency, StreakRow, CompletionRow } from "@sisigo/types";
+import type { HabitWithFrequency, StreakRow, CompletionRow } from "@rock_ht/types";
 import { isScheduledOn, completionRate } from "./streaks";
 import { today } from "./dates";
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { CompletionRow } from "@sisigo/types";
-import { completionsByHour } from "@sisigo/utils";
+import type { CompletionRow } from "@rock_ht/types";
+import { completionsByHour } from "@rock_ht/utils";
 
 function hourLabel(hour: number): string {
   if (hour === 0) return "12am";

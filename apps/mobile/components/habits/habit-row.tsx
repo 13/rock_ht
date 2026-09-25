@@ -1,8 +1,8 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import Animated, { FadeInRight, Layout } from "react-native-reanimated";
 import { CompletionButton } from "./completion-button";
-import { formatFrequencyLabel } from "@sisigo/utils";
-import type { HabitWithFrequency, StreakRow } from "@sisigo/types";
+import { formatFrequencyLabel } from "@rock_ht/utils";
+import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
 
 interface HabitRowProps {
   habit: HabitWithFrequency;
