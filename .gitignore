@@ -44,3 +44,6 @@ supabase/.temp
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# graphify knowledge graph output
+graphify-out/
