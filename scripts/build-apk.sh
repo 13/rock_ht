@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a signed release APK of the rock mobile app, optionally install it.
 #
-# Output: dist/rock_ht-<appVersion>-<gitShortSha>-release.apk
+# Output: dist/rock_ht-<versionName>-<gitShortSha>-release.apk
 #
 # Signs with the same release keystore as Apex Maps (MUH Studios cert), so
 # phones carrying a script-built rock APK only accept updates signed with it;
@@ -115,9 +115,13 @@ gradle_args=(
 )
 [ "$abi" = "all" ] || gradle_args+=("-PreactNativeArchitectures=$abi")
 
+read -r VERSION_NAME VERSION_CODE < <("$ROOT/scripts/apk-version.sh" "$ROOT") \
+    || die "cannot derive version (see apk-version.sh error above)"
+gradle_args+=("-ProckVersionName=$VERSION_NAME" "-ProckVersionCode=$VERSION_CODE")
+
 builtin cd "$ANDROID_DIR"
 [ "$do_clean" = 1 ] && ./gradlew "${gradle_args[@]}" clean
-echo "== assembleRelease (abi: $abi)"
+echo "== assembleRelease (abi: $abi, version: $VERSION_NAME / $VERSION_CODE)"
 ./gradlew "${gradle_args[@]}" assembleRelease
 
 UNSIGNED="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
@@ -127,10 +131,9 @@ UNSIGNED="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 APKSIGNER="$(find "$SDK/build-tools" -name apksigner | sort -V | tail -1)"
 [ -n "$APKSIGNER" ] || die "no apksigner under $SDK/build-tools"
 
-VERSION="$(node -p "require('$MOBILE/app.json').expo.version")"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 mkdir -p "$DIST"
-OUT="$DIST/rock_ht-$VERSION-$SHA-release.apk"
+OUT="$DIST/rock_ht-$VERSION_NAME-$SHA-release.apk"
 
 # minSdk 24: v1 (JAR) signing is only read by Android 6 and older
 echo "== signing"
@@ -146,7 +149,18 @@ cert="$("$APKSIGNER" verify --print-certs "$OUT" 2>/dev/null \
         | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
 [ "$cert" = "$EXPECTED_CERT" ] \
     || die "signed with unexpected cert $cert (expected $EXPECTED_CERT)"
-echo "built $OUT ($(du -h "$OUT" | cut -f1), cert ${cert:0:8}…${cert: -4})"
+
+AAPT2="$(find "$SDK/build-tools" -name aapt2 | sort -V | tail -1)"
+[ -n "$AAPT2" ] || die "no aapt2 under $SDK/build-tools"
+# capture full output rather than piping to `head -1`: aapt2 writes many
+# lines, and under `pipefail` a reader that stops early gives aapt2 SIGPIPE,
+# which aborts the script even though the line we want was already produced
+badging="$("$AAPT2" dump badging "$OUT")"
+badging="${badging%%$'\n'*}"
+grep -q "versionCode='$VERSION_CODE' versionName='$VERSION_NAME'" <<<"$badging" \
+    || die "APK version mismatch: $badging"
+
+echo "built $OUT ($(du -h "$OUT" | cut -f1), $VERSION_NAME/$VERSION_CODE, cert ${cert:0:8}…${cert: -4})"
 
 # ---- install ---------------------------------------------------------------
 [ "$do_install" = 1 ] || exit 0

@@ -92,8 +92,9 @@ android {
         applicationId 'app.rockht.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        // Set by scripts/build-apk.sh from scripts/apk-version.sh
+        versionCode((findProperty('rockVersionCode') ?: '1').toInteger())
+        versionName(findProperty('rockVersionName') ?: '0.0.0-dev')
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
