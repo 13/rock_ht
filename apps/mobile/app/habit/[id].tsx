@@ -24,11 +24,13 @@ import {
 } from "@rock_ht/utils";
 import { hapticMedium, hapticWarning } from "@/lib/haptics";
 import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const DOW_ORDERED = [1, 2, 3, 4, 5, 6, 0]; // Mon first
 
 export default function HabitDetailScreen() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -45,9 +47,9 @@ export default function HabitDetailScreen() {
 
   if (!habit) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "#6b6b80" }}>Habit not found</Text>
+          <Text style={{ color: colors.textMuted }}>Habit not found</Text>
         </View>
       </SafeAreaView>
     );
@@ -106,7 +108,7 @@ export default function HabitDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top"]}>
       {/* Header */}
       <View
         style={{
@@ -119,10 +121,10 @@ export default function HabitDetailScreen() {
         }}
       >
         <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ color: "#6366f1", fontSize: 16 }}>← Back</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { hapticMedium(); setShowEditSheet(true); }} hitSlop={8}>
-          <Text style={{ color: "#6366f1", fontSize: 16 }}>Edit</Text>
+          <Text style={{ color: colors.primary, fontSize: 16 }}>Edit</Text>
         </TouchableOpacity>
       </View>
 
@@ -149,15 +151,15 @@ export default function HabitDetailScreen() {
               <Text style={{ fontSize: 26 }}>{h.icon}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 20, fontWeight: "700", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: colors.foreground }}>
                 {h.title}
               </Text>
               {h.description ? (
-                <Text style={{ fontSize: 13, color: "#6b6b80", marginTop: 2 }}>
+                <Text style={{ fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
                   {h.description}
                 </Text>
               ) : null}
-              <Text style={{ fontSize: 12, color: "#6b6b80", marginTop: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
                 {formatFrequencyLabel(h.frequency)}
               </Text>
             </View>
@@ -169,10 +171,10 @@ export default function HabitDetailScreen() {
           style={{
             marginHorizontal: 20,
             padding: 20,
-            backgroundColor: "#111118",
+            backgroundColor: colors.card,
             borderRadius: 20,
             borderWidth: 1,
-            borderColor: "#1e1e2a",
+            borderColor: colors.border,
             flexDirection: "row",
             alignItems: "center",
             gap: 20,
@@ -186,18 +188,18 @@ export default function HabitDetailScreen() {
           />
           <View style={{ flex: 1, gap: 8 }}>
             <View>
-              <Text style={{ fontSize: 11, color: "#6b6b80", marginBottom: 1 }}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 1 }}>
                 30-day rate
               </Text>
-              <Text style={{ fontSize: 22, fontWeight: "700", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 22, fontWeight: "700", color: colors.foreground }}>
                 {rate30}%
               </Text>
             </View>
             <View>
-              <Text style={{ fontSize: 11, color: "#6b6b80", marginBottom: 1 }}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 1 }}>
                 Best streak
               </Text>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
                 {streak?.longest_streak ?? 0} days
               </Text>
             </View>
@@ -209,10 +211,10 @@ export default function HabitDetailScreen() {
           style={{
             marginHorizontal: 20,
             padding: 16,
-            backgroundColor: "#111118",
+            backgroundColor: colors.card,
             borderRadius: 20,
             borderWidth: 1,
-            borderColor: "#1e1e2a",
+            borderColor: colors.border,
             marginBottom: 16,
           }}
         >
@@ -220,7 +222,7 @@ export default function HabitDetailScreen() {
             style={{
               fontSize: 11,
               fontWeight: "600",
-              color: "#6b6b80",
+              color: colors.textMuted,
               textTransform: "uppercase",
               letterSpacing: 0.6,
               marginBottom: 10,
@@ -247,7 +249,7 @@ export default function HabitDetailScreen() {
                             borderRadius: 3,
                             backgroundColor: cell?.completed
                               ? h.color
-                              : "#1e1e2a",
+                              : colors.border,
                             opacity: cell?.completed ? 0.85 : 1,
                           }}
                         />
@@ -265,10 +267,10 @@ export default function HabitDetailScreen() {
           style={{
             marginHorizontal: 20,
             padding: 16,
-            backgroundColor: "#111118",
+            backgroundColor: colors.card,
             borderRadius: 20,
             borderWidth: 1,
-            borderColor: "#1e1e2a",
+            borderColor: colors.border,
             marginBottom: 16,
           }}
         >
@@ -276,7 +278,7 @@ export default function HabitDetailScreen() {
             style={{
               fontSize: 11,
               fontWeight: "600",
-              color: "#6b6b80",
+              color: colors.textMuted,
               textTransform: "uppercase",
               letterSpacing: 0.6,
               marginBottom: 12,
@@ -295,7 +297,7 @@ export default function HabitDetailScreen() {
                       height: barH,
                       borderRadius: 4,
                       backgroundColor:
-                        d.scheduled === 0 ? "#1e1e2a" : h.color,
+                        d.scheduled === 0 ? colors.border : h.color,
                       opacity:
                         d.scheduled === 0
                           ? 1
@@ -303,7 +305,7 @@ export default function HabitDetailScreen() {
                       marginBottom: 4,
                     }}
                   />
-                  <Text style={{ fontSize: 9, color: "#6b6b80" }}>
+                  <Text style={{ fontSize: 9, color: colors.textMuted }}>
                     {DAY_LABELS[d.day]}
                   </Text>
                 </View>
@@ -318,10 +320,10 @@ export default function HabitDetailScreen() {
             style={{
               marginHorizontal: 20,
               padding: 16,
-              backgroundColor: "#111118",
+              backgroundColor: colors.card,
               borderRadius: 20,
               borderWidth: 1,
-              borderColor: "#1e1e2a",
+              borderColor: colors.border,
               marginBottom: 16,
             }}
           >
@@ -329,7 +331,7 @@ export default function HabitDetailScreen() {
               style={{
                 fontSize: 11,
                 fontWeight: "600",
-                color: "#6b6b80",
+                color: colors.textMuted,
                 textTransform: "uppercase",
                 letterSpacing: 0.6,
                 marginBottom: 10,
@@ -346,10 +348,10 @@ export default function HabitDetailScreen() {
                   justifyContent: "space-between",
                   paddingVertical: 8,
                   borderBottomWidth: i < recentCompletions.length - 1 ? 1 : 0,
-                  borderBottomColor: "#1e1e2a",
+                  borderBottomColor: colors.border,
                 }}
               >
-                <Text style={{ fontSize: 13, color: "#f4f4f8" }}>
+                <Text style={{ fontSize: 13, color: colors.foreground }}>
                   {formatRelativeDay(c.completed_date)}
                 </Text>
                 <View
@@ -398,11 +400,11 @@ export default function HabitDetailScreen() {
               paddingVertical: 13,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#2d2d3a",
+              borderColor: colors.elevated,
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#9ca3af", fontSize: 14, fontWeight: "500" }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: "500" }}>
               Archive habit
             </Text>
           </TouchableOpacity>
@@ -412,11 +414,11 @@ export default function HabitDetailScreen() {
               paddingVertical: 13,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#7f1d1d40",
+              borderColor: colors.danger + "20",
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#f87171", fontSize: 14, fontWeight: "500" }}>
+            <Text style={{ color: colors.danger, fontSize: 14, fontWeight: "500" }}>
               Delete habit
             </Text>
           </TouchableOpacity>

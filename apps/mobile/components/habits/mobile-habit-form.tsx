@@ -10,6 +10,7 @@ import { PRESET_ICONS, PRESET_COLORS } from "@rock_ht/types";
 import { hapticLight } from "@/lib/haptics";
 import { requestNotificationPermission } from "@/lib/notifications";
 import type { CreateHabitInput, HabitWithFrequency } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
@@ -48,6 +49,7 @@ export function MobileHabitForm({
   onCancel,
   isLoading = false,
 }: MobileHabitFormProps) {
+  const { colors } = useTheme();
   const defaultFreq = initial?.frequency ?? { type: "daily" as const };
   const defaultSpecificDays =
     defaultFreq.type === "specific_days" ? defaultFreq.days : [];
@@ -134,7 +136,7 @@ export function MobileHabitForm({
     <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
       {/* Title */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af", marginBottom: 6 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary, marginBottom: 6 }}>
           Title
         </Text>
         <Controller
@@ -145,16 +147,16 @@ export function MobileHabitForm({
               value={field.value}
               onChangeText={field.onChange}
               placeholder="e.g. Morning run"
-              placeholderTextColor="#4b5563"
+              placeholderTextColor={colors.textMuted}
               style={{
-                backgroundColor: "#111118",
-                color: "#f4f4f8",
+                backgroundColor: colors.card,
+                color: colors.foreground,
                 borderRadius: 12,
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 fontSize: 15,
                 borderWidth: 1,
-                borderColor: "#2d2d3a",
+                borderColor: colors.elevated,
               }}
               autoFocus
               returnKeyType="next"
@@ -162,7 +164,7 @@ export function MobileHabitForm({
           )}
         />
         {formState.errors.title && (
-          <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+          <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }}>
             {formState.errors.title.message}
           </Text>
         )}
@@ -170,9 +172,9 @@ export function MobileHabitForm({
 
       {/* Description */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af", marginBottom: 6 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary, marginBottom: 6 }}>
           Description{" "}
-          <Text style={{ color: "#6b7280" }}>(optional)</Text>
+          <Text style={{ color: colors.textMuted }}>(optional)</Text>
         </Text>
         <Controller
           control={control}
@@ -182,16 +184,16 @@ export function MobileHabitForm({
               value={field.value}
               onChangeText={field.onChange}
               placeholder="What does this habit mean to you?"
-              placeholderTextColor="#4b5563"
+              placeholderTextColor={colors.textMuted}
               style={{
-                backgroundColor: "#111118",
-                color: "#f4f4f8",
+                backgroundColor: colors.card,
+                color: colors.foreground,
                 borderRadius: 12,
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 fontSize: 15,
                 borderWidth: 1,
-                borderColor: "#2d2d3a",
+                borderColor: colors.elevated,
                 minHeight: 72,
                 textAlignVertical: "top",
               }}
@@ -204,7 +206,7 @@ export function MobileHabitForm({
 
       {/* Icon */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af", marginBottom: 6 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary, marginBottom: 6 }}>
           Icon
         </Text>
         <ScrollView
@@ -227,7 +229,7 @@ export function MobileHabitForm({
                 justifyContent: "center",
                 borderWidth: 2,
                 borderColor: selectedIcon === icon ? selectedColor : "transparent",
-                backgroundColor: selectedIcon === icon ? selectedColor + "22" : "#1e1e2a",
+                backgroundColor: selectedIcon === icon ? selectedColor + "22" : colors.muted,
               }}
             >
               <Text style={{ fontSize: 22 }}>{icon}</Text>
@@ -238,7 +240,7 @@ export function MobileHabitForm({
 
       {/* Color */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af", marginBottom: 6 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary, marginBottom: 6 }}>
           Color
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -255,7 +257,7 @@ export function MobileHabitForm({
                 borderRadius: 16,
                 backgroundColor: color,
                 borderWidth: selectedColor === color ? 3 : 0,
-                borderColor: "white",
+                borderColor: colors.foreground,
               }}
             />
           ))}
@@ -264,7 +266,7 @@ export function MobileHabitForm({
 
       {/* Frequency */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af", marginBottom: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary, marginBottom: 8 }}>
           Frequency
         </Text>
         <ScrollView
@@ -289,14 +291,14 @@ export function MobileHabitForm({
                 paddingHorizontal: 14,
                 paddingVertical: 7,
                 borderRadius: 20,
-                backgroundColor: frequencyType === opt.value ? selectedColor : "#1e1e2a",
+                backgroundColor: frequencyType === opt.value ? selectedColor : colors.muted,
               }}
             >
               <Text
                 style={{
                   fontSize: 13,
                   fontWeight: "500",
-                  color: frequencyType === opt.value ? "white" : "#9ca3af",
+                  color: frequencyType === opt.value ? colors.onPrimary : colors.textSecondary,
                 }}
               >
                 {opt.label}
@@ -319,14 +321,14 @@ export function MobileHabitForm({
                     borderRadius: 999,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: active ? selectedColor : "#1e1e2a",
+                    backgroundColor: active ? selectedColor : colors.muted,
                   }}
                 >
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: active ? "white" : "#6b7280",
+                      color: active ? colors.onPrimary : colors.textMuted,
                     }}
                   >
                     {label}
@@ -351,14 +353,14 @@ export function MobileHabitForm({
                   paddingVertical: 8,
                   borderRadius: 10,
                   alignItems: "center",
-                  backgroundColor: timesPerWeek === n ? selectedColor : "#1e1e2a",
+                  backgroundColor: timesPerWeek === n ? selectedColor : colors.muted,
                 }}
               >
                 <Text
                   style={{
                     fontSize: 13,
                     fontWeight: "600",
-                    color: timesPerWeek === n ? "white" : "#6b7280",
+                    color: timesPerWeek === n ? colors.onPrimary : colors.textMuted,
                   }}
                 >
                   {n}
@@ -378,14 +380,14 @@ export function MobileHabitForm({
             justifyContent: "space-between",
           }}
         >
-          <Text style={{ fontSize: 13, fontWeight: "500", color: "#9ca3af" }}>
+          <Text style={{ fontSize: 13, fontWeight: "500", color: colors.textSecondary }}>
             Reminder
           </Text>
           <Switch
             value={reminderEnabled}
             onValueChange={handleReminderToggle}
-            trackColor={{ false: "#2d2d3a", true: selectedColor }}
-            thumbColor="white"
+            trackColor={{ false: colors.elevated, true: selectedColor }}
+            thumbColor={colors.onPrimary}
           />
         </View>
 
@@ -402,16 +404,16 @@ export function MobileHabitForm({
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 20,
-                backgroundColor: "#1e1e2a",
+                backgroundColor: colors.muted,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#f4f4f8" }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
                 {reminderTime}
               </Text>
             </TouchableOpacity>
 
             {notificationHint && (
-              <Text style={{ color: "#f59e0b", fontSize: 12, marginTop: 8 }}>
+              <Text style={{ color: colors.warning, fontSize: 12, marginTop: 8 }}>
                 Enable notifications in your device Settings to receive habit
                 reminders.
               </Text>
@@ -438,11 +440,11 @@ export function MobileHabitForm({
             paddingVertical: 14,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: "#2d2d3a",
+            borderColor: colors.elevated,
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "#9ca3af", fontWeight: "600", fontSize: 15 }}>
+          <Text style={{ color: colors.textSecondary, fontWeight: "600", fontSize: 15 }}>
             Cancel
           </Text>
         </TouchableOpacity>
@@ -459,9 +461,9 @@ export function MobileHabitForm({
           }}
         >
           {isLoading ? (
-            <ActivityIndicator color="white" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
-            <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
+            <Text style={{ color: colors.onPrimary, fontWeight: "600", fontSize: 15 }}>
               {initial ? "Save" : "Create"}
             </Text>
           )}

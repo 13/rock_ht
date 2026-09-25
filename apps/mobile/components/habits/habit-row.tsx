@@ -3,6 +3,7 @@ import Animated, { FadeInRight, Layout } from "react-native-reanimated";
 import { CompletionButton } from "./completion-button";
 import { formatFrequencyLabel } from "@rock_ht/utils";
 import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 interface HabitRowProps {
   habit: HabitWithFrequency;
@@ -19,6 +20,7 @@ export function HabitRow({
   onToggle,
   onPress,
 }: HabitRowProps) {
+  const { colors } = useTheme();
   const currentStreak = streak?.current_streak ?? 0;
 
   return (
@@ -31,10 +33,10 @@ export function HabitRow({
         gap: 12,
         paddingVertical: 14,
         paddingHorizontal: 16,
-        backgroundColor: "#111118",
+        backgroundColor: colors.card,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: "#1e1e2a",
+        borderColor: colors.border,
         marginBottom: 8,
         opacity: completed ? 0.7 : 1,
       }}
@@ -67,7 +69,7 @@ export function HabitRow({
             style={{
               fontSize: 15,
               fontWeight: "500",
-              color: completed ? "#6b6b80" : "#f4f4f8",
+              color: completed ? colors.textMuted : colors.foreground,
               textDecorationLine: completed ? "line-through" : "none",
               flex: 1,
             }}
@@ -77,7 +79,7 @@ export function HabitRow({
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-          <Text style={{ fontSize: 12, color: "#6b6b80" }}>
+          <Text style={{ fontSize: 12, color: colors.textMuted }}>
             {formatFrequencyLabel(habit.frequency)}
           </Text>
           {currentStreak > 0 && (
@@ -86,14 +88,14 @@ export function HabitRow({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 3,
-                backgroundColor: "#f97316" + "20",
+                backgroundColor: colors.streak + "20",
                 paddingHorizontal: 6,
                 paddingVertical: 2,
                 borderRadius: 10,
               }}
             >
               <Text style={{ fontSize: 11 }}>🔥</Text>
-              <Text style={{ fontSize: 11, fontWeight: "600", color: "#f97316" }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: colors.streak }}>
                 {currentStreak}
               </Text>
             </View>

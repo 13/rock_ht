@@ -13,6 +13,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { hapticSuccess, hapticMedium, hapticError } from "@/lib/haptics";
 import { isStreakAtRisk } from "@rock_ht/utils";
 import type { HabitWithFrequency, StreakRow } from "@rock_ht/types";
+import { useTheme } from "@/theme/theme-provider";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_COMPLETE_THRESHOLD = 72;
@@ -36,6 +37,7 @@ export function SwipeableHabitRow({
   onDelete,
   onPress,
 }: SwipeableHabitRowProps) {
+  const { colors } = useTheme();
   const translateX = useSharedValue(0);
   const startX = useSharedValue(0);
   const isDeleting = useSharedValue(false);
@@ -159,14 +161,14 @@ export function SwipeableHabitRow({
                   height: 28,
                   borderRadius: 14,
                   borderWidth: 2,
-                  borderColor: completed ? habit.color : "#6b7280",
+                  borderColor: completed ? habit.color : colors.textMuted,
                   backgroundColor: completed ? habit.color : "transparent",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 {completed && (
-                  <Text style={{ color: "white", fontSize: 14 }}>✓</Text>
+                  <Text style={{ color: colors.onPrimary, fontSize: 14 }}>✓</Text>
                 )}
               </View>
             </TouchableOpacity>
@@ -182,7 +184,7 @@ export function SwipeableHabitRow({
                   {habit.title}
                 </Text>
                 {atRisk ? (
-                  <Text style={{ fontSize: 11, color: "#f59e0b", marginTop: 2, fontWeight: "600" }}>
+                  <Text style={{ fontSize: 11, color: colors.warning, marginTop: 2, fontWeight: "600" }}>
                     ⚡ Keep streak alive
                   </Text>
                 ) : habit.description ? (

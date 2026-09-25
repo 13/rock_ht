@@ -6,6 +6,7 @@ import Animated, {
   withSequence,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@/theme/theme-provider";
 
 interface CompletionButtonProps {
   completed: boolean;
@@ -20,6 +21,7 @@ export function CompletionButton({
   onToggle,
   size = 36,
 }: CompletionButtonProps) {
+  const { colors } = useTheme();
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -56,7 +58,7 @@ export function CompletionButton({
           <Ionicons
             name="checkmark"
             size={size * 0.5}
-            color="#fff"
+            color={colors.onPrimary}
           />
         )}
       </Animated.View>
