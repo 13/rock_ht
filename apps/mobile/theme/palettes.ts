@@ -25,6 +25,9 @@ export interface Palette {
   warning: string;
   streak: string;
   success: string;
+  /** Stats insight accents (same in every theme) */
+  insightStrength: string;
+  insightMilestone: string;
   statusBar: "light" | "dark";
 }
 
@@ -34,6 +37,8 @@ const shared = {
   warning: "#f59e0b",
   streak: "#f97316",
   success: "#22c55e",
+  insightStrength: "#10b981",
+  insightMilestone: "#8b5cf6",
 };
 
 export const PALETTES: Record<ThemeName, Palette> = {

@@ -202,9 +202,9 @@ export default function AnalyticsScreen() {
             <View style={{ gap: 10 }}>
               {insights.slice(0, 4).map((insight) => {
                 const borderColor =
-                  insight.type === "strength" ? colors.success
+                  insight.type === "strength" ? colors.insightStrength
                   : insight.type === "warning" ? colors.warning
-                  : insight.type === "milestone" ? "#8b5cf6"
+                  : insight.type === "milestone" ? colors.insightMilestone
                   : colors.primary;
                 return (
                   <View
