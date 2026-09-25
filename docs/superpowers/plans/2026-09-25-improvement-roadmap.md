@@ -4,8 +4,8 @@ A prioritised list of improvements, based on this session's CI runs, the code re
 
 ## Status (2026-09-25, evening)
 
-- **Done:** P0 #1–#4 (`2026-09-25-p0-fixes.md`); #11 milestone M1 (offline-first Tasks 1–9, see the commits up to `6413486`).
-- **Partly done:** #5, because `scripts/build-apk.sh` signs local builds with the release key but CI still signs with the debug key. #8, because `@rock_ht/sync` and `@rock_ht/local-db` now have tests but the web routes and UI still don't. #17 is still open because `today()` on the server gives the container's date.
+- **Done:** P0 #1–#4 (`2026-09-25-p0-fixes.md`); #11 milestone M1 (offline-first Tasks 1–9, see the commits up to `6413486`); #16 and #17 (`supabase/migrations/007_timezone_streaks.sql` makes `recalculate_streak` judge "today" in the user's `profiles.timezone`; the web app now writes the browser's IANA time zone onto the profile on load; the AI routes and `getLast30DaysCompletions` now take the user's local date via `todayIn`).
+- **Partly done:** #5, because `scripts/build-apk.sh` signs local builds with the release key but CI still signs with the debug key. #8, because `@rock_ht/sync` and `@rock_ht/local-db` now have tests but the web routes and UI still don't.
 - **Found since:** the web export filename still takes its date from `toISOString()` (`apps/web/app/(app)/settings/page.tsx:120`).
 - **Next:** #5–#7 in `2026-09-25-apk-release-pipeline.md`.
 
@@ -43,8 +43,8 @@ A prioritised list of improvements, based on this session's CI runs, the code re
 
 | # | Item | Evidence | Fix | Size |
 |---|---|---|---|---|
-| 16 ★ | **Streak trigger uses the server's UTC date** | `supabase/migrations/003_functions_triggers.sql:110`. `recalculate_streak` compares against `current_date`, which is UTC on the DB server. For a user west of UTC in the evening after UTC midnight, un-toggling today's completion zeroes a live streak. The displayed streaks come from `habit_streaks` via `getStreaks` on both web and mobile. | In a new migration, compute "today" as `(now() at time zone p.timezone)::date` using `profiles.timezone`. | S–M |
-| 17 | **Server-side "today" for AI routes** | `apps/web/app/api/ai/journal-prompt/route.ts:37` and `api/ai/coach` (via `getLast30DaysCompletions`) run in the container timezone (UTC), not the user's. | Have the client send its local date, or derive it from `profiles.timezone`. | S |
+| 16 ★ | **Done — Streak trigger uses the server's UTC date** | `supabase/migrations/003_functions_triggers.sql:110`. `recalculate_streak` compares against `current_date`, which is UTC on the DB server. For a user west of UTC in the evening after UTC midnight, un-toggling today's completion zeroes a live streak. The displayed streaks come from `habit_streaks` via `getStreaks` on both web and mobile. | Fixed in `supabase/migrations/007_timezone_streaks.sql`: `recalculate_streak` now computes "today" as `(now() at time zone p.timezone)::date`, resolving `profiles.timezone` against `pg_timezone_names` and falling back to UTC. The web app also now writes the browser's IANA time zone onto `profiles.timezone` on load (`apps/web/components/layout/timezone-sync.tsx`), so the column stops being stuck at the `'UTC'` default. | S–M |
+| 17 | **Done — Server-side "today" for AI routes** | `apps/web/app/api/ai/journal-prompt/route.ts:37` and `api/ai/coach` (via `getLast30DaysCompletions`) run in the container timezone (UTC), not the user's. | Fixed: both routes load `profile.timezone` and compute `todayIn(profile?.timezone ?? "UTC")` (new `@rock_ht/utils` helper), passed to `getTodayCompletions` and `getLast30DaysCompletions(db, user.id, todayStr)`. | S |
 
 ## Suggested order
 

@@ -43,7 +43,7 @@ Each milestone ends with working, shippable software:
 | M1 | 1–9 | Android app fully offline: local SQLite store (with outbox), no login, reminders, export/import, APK builds with no env | any backend, any network |
 | M2 | 10–11 | Sync engine, HTTP remote, sync settings (Off / Self-hosted / Supabase), background triggers, cleartext for LAN servers | a running backend (settings stay Off) |
 | M3 | 12–13 | Self-hosted plain Postgres backend: sync SQL, Better Auth, `/api/sync`, web image builds without Supabase, `docker-compose.selfhost.yml` | Supabase |
-| M4 | 14–15 | Supabase as an optional backend: migration 007 (sync columns, RPCs, timezone-aware streaks), web soft deletes, Supabase remote | self-host |
+| M4 | 14–15 | Supabase as an optional backend: migration 008 (sync columns, RPCs, timezone-aware streaks), web soft deletes, Supabase remote | self-host |
 | Later | — | Web app without Supabase (**separate plan**, outlined only) | — |
 
 Porting the Next.js UI off Supabase auth/queries is a separate plan. This plan only makes the web **build** without Supabase env (Task 13) so the self-host image can be built.
@@ -102,7 +102,7 @@ scripts/build-apk.sh                MODIFY no Supabase env required             
 .github/workflows/android-apk.yml   MODIFY drop EXPO_PUBLIC_SUPABASE_* secrets                          (Task 9)
 
 db/selfhost/init/01_schema.sql      NEW  tables without auth.users/RLS                                  (M3)
-db/selfhost/init/02_sync.sql        NEW  sync functions (identical block to 007)                        (M3)
+db/selfhost/init/02_sync.sql        NEW  sync functions (identical block to 008)                        (M3)
 db/selfhost/init/03_auth.sql        NEW  Better Auth tables (generated)                                 (M3)
 docker-compose.selfhost.yml         NEW                                                                 (M3)
 apps/web/lib/server/db.ts           NEW  pg Pool                                                        (M3)
@@ -111,7 +111,7 @@ apps/web/app/api/auth/[...all]/route.ts   NEW                                   
 apps/web/app/api/sync/push/route.ts NEW                                                                 (M3)
 apps/web/app/api/sync/pull/route.ts NEW                                                                 (M3)
 .github/workflows/deploy-web.yml    MODIFY build without Supabase secrets                               (M3)
-supabase/migrations/007_sync.sql    NEW                                                                 (M4)
+supabase/migrations/008_sync.sql    NEW                                                                 (M4)
 packages/db/src/*.ts                MODIFY  soft deletes + deleted_at filters                           (M4)
 packages/types/src/database.types.ts MODIFY  new columns                                                (M4)
 ```
@@ -3249,10 +3249,10 @@ create index completions_user_seq_idx on public.habit_completions (user_id, serv
 create index journal_user_seq_idx on public.journal_entries (user_id, server_seq);
 ```
 
-- [ ] **Step 2: Sync functions (`02_sync.sql`)**: this block is copied verbatim into `supabase/migrations/007_sync.sql` in Task 14. A parity test enforces that.
+- [ ] **Step 2: Sync functions (`02_sync.sql`)**: this block is copied verbatim into `supabase/migrations/008_sync.sql` in Task 14. A parity test enforces that.
 
 ```sql
--- >>> SYNC FUNCTIONS (keep identical to supabase/migrations/007_sync.sql)
+-- >>> SYNC FUNCTIONS (keep identical to supabase/migrations/008_sync.sql)
 create or replace function public.bump_sync_seq()
 returns trigger language plpgsql as $$
 begin
@@ -3726,17 +3726,19 @@ git commit -m "feat(selfhost): build web without Supabase env and add docker com
 
 ## M4 — Supabase as an optional sync backend
 
-### Task 14: Supabase migration 007 + web client soft deletes
+### Task 14: Supabase migration 008 + web client soft deletes
 
 **Carry-over from M1 review:**
 - Normalize completion ids to `completionId(habit_id, completed_date)` on import, once web/Supabase exports exist and can hand back ids that don't already follow that scheme (`packages/local-db/src/backup.ts`, `packages/local-db/src/store.ts` `importBackup`).
 
 **Files:**
-- Create: `supabase/migrations/007_sync.sql`
+- Create: `supabase/migrations/008_sync.sql`
 - Create: `packages/sync/src/__tests__/sql-parity.test.ts`
 - Modify: `packages/types/src/database.types.ts` (add `updated_at`, `deleted_at`, `server_seq` to the synced tables' Row/Insert/Update, and add the `sync_push`/`sync_pull` Functions)
 - Modify: `packages/db/src/habits.ts`, `completions.ts`, `journal.ts`, `streaks.ts` if it reads completions directly
-- Do not modify `supabase/migrations/003_functions_triggers.sql`; 007 replaces `recalculate_streak` with `create or replace`.
+- Do not modify `supabase/migrations/003_functions_triggers.sql`; 008 replaces `recalculate_streak` with `create or replace`.
+
+`supabase/migrations/007_timezone_streaks.sql` already made `recalculate_streak` timezone-aware (roadmap #16, landed separately); 008's version below builds on that and additionally filters out tombstoned rows (`deleted_at is null`) for the offline-sync soft-delete model.
 
 **Interfaces:**
 - Produces RPCs: `sync_push(p_changes jsonb) returns void`, `sync_pull(p_cursor bigint, p_limit int) returns jsonb` (both `security definer`, using `auth.uid()`).
@@ -3759,18 +3761,18 @@ const block = (file: string) => {
 
 describe('sync SQL parity', () => {
   it('self-host and Supabase share identical sync functions', () => {
-    expect(block('supabase/migrations/007_sync.sql')).toBe(block('db/selfhost/init/02_sync.sql'))
+    expect(block('supabase/migrations/008_sync.sql')).toBe(block('db/selfhost/init/02_sync.sql'))
   })
 })
 ```
 
-- [ ] **Step 2: Write `007_sync.sql`**
+- [ ] **Step 2: Write `008_sync.sql`**
 
 The file is assembled in three parts so the shared block is copied byte-for-byte from `02_sync.sql` (the parity test from Step 1 enforces it).
 
 Part 1: sync columns, deterministic completion ids, and a streak function that ignores tombstones and uses the user's timezone (roadmap #16: `003_functions_triggers.sql:110` compares against `current_date`, the database server's UTC date).
 ```bash
-cat > supabase/migrations/007_sync.sql <<'SQL'
+cat > supabase/migrations/008_sync.sql <<'SQL'
 -- ============================================================
 -- rock: offline sync (tombstones, LWW timestamps, server_seq)
 -- ============================================================
@@ -3894,12 +3896,12 @@ SQL
 
 Part 2: the shared sync functions, copied from the self-host file.
 ```bash
-sed -n '/^-- >>> SYNC FUNCTIONS/,/^-- <<< SYNC FUNCTIONS/p' db/selfhost/init/02_sync.sql >> supabase/migrations/007_sync.sql
+sed -n '/^-- >>> SYNC FUNCTIONS/,/^-- <<< SYNC FUNCTIONS/p' db/selfhost/init/02_sync.sql >> supabase/migrations/008_sync.sql
 ```
 
 Part 3: auth-bound RPC wrappers.
 ```bash
-cat >> supabase/migrations/007_sync.sql <<'SQL'
+cat >> supabase/migrations/008_sync.sql <<'SQL'
 
 -- Only callable through the auth-bound wrappers below
 revoke execute on function public.sync_push_for(uuid, jsonb) from public, anon, authenticated;
@@ -3929,7 +3931,7 @@ SQL
 Check the timezone fix against the local stack after `db reset` (Step 2's Run lines below): in Studio's SQL editor, for a user with `timezone = 'Pacific/Pago_Pago'` (UTC−11) and a completion dated yesterday in that zone, `select public.recalculate_streak('<habit id>'); select current_streak from habit_streaks where habit_id = '<habit id>';` returns 1 even when the UTC date is already two days later than that completion.
 
 Run: `npm test --workspace=packages/sync` → parity test PASS.
-Run: `npx supabase db reset` (local stack via `npm run db:start`) → migrations 001–007 apply cleanly.
+Run: `npx supabase db reset` (local stack via `npm run db:start`) → migrations 001–008 apply cleanly.
 
 - [ ] **Step 3: Web data layer: soft deletes and filters**
 
