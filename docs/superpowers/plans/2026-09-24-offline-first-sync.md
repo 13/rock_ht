@@ -3738,7 +3738,7 @@ git commit -m "feat(selfhost): build web without Supabase env and add docker com
 - Modify: `packages/db/src/habits.ts`, `completions.ts`, `journal.ts`, `streaks.ts` if it reads completions directly
 - Do not modify `supabase/migrations/003_functions_triggers.sql`; 008 replaces `recalculate_streak` with `create or replace`.
 
-`supabase/migrations/007_timezone_streaks.sql` already made `recalculate_streak` timezone-aware (roadmap #16, landed separately); 008's version below builds on that and additionally filters out tombstoned rows (`deleted_at is null`) for the offline-sync soft-delete model.
+`supabase/migrations/007_timezone_streaks.sql` already made `recalculate_streak` timezone-aware (roadmap #16, landed separately); 008's version below keeps 007's guards (deleted habit returns early, unknown zone falls back to UTC) and additionally filters out tombstoned rows (`deleted_at is null`) for the offline-sync soft-delete model.
 
 **Interfaces:**
 - Produces RPCs: `sync_push(p_changes jsonb) returns void`, `sync_pull(p_cursor bigint, p_limit int) returns jsonb` (both `security definer`, using `auth.uid()`).
@@ -3816,6 +3816,7 @@ security definer set search_path = public
 as $$
 declare
   v_user_id           uuid;
+  v_timezone          text;
   v_today             date;
   v_current_streak    integer := 0;
   v_longest_streak    integer := 0;
@@ -3824,11 +3825,24 @@ declare
   v_prev_date         date    := null;
   r                   record;
 begin
-  select h.user_id, (now() at time zone coalesce(p.timezone, 'UTC'))::date
-    into v_user_id, v_today
+  select h.user_id, coalesce(nullif(p.timezone, ''), 'UTC')
+    into v_user_id, v_timezone
     from public.habits h
     left join public.profiles p on p.id = h.user_id
    where h.id = p_habit_id;
+
+  -- Habit already deleted (called from the completion-delete trigger during
+  -- the cascade): nothing to recalculate. Same guard as 007.
+  if v_user_id is null then
+    return;
+  end if;
+
+  -- Unknown zone names raise invalid_parameter_value; fall back to UTC (as 007)
+  begin
+    v_today := (now() at time zone v_timezone)::date;
+  exception when invalid_parameter_value then
+    v_today := (now() at time zone 'UTC')::date;
+  end;
 
   for r in
     select completed_date
