@@ -89,8 +89,9 @@ export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
 # @react-native/gradle-plugin requests a JDK 17 toolchain; without a local
 # one Gradle's foojay 0.5.0 auto-download crashes on Gradle 9 (IBM_SEMERU)
 JDK17=""
-for d in "$HOME"/.gradle/jdks/jdk-17* /usr/lib/jvm/java-17*; do
-    [ -x "$d/bin/java" ] && { JDK17="$d"; break; }
+# JAVA_HOME_17_X64 is set on GitHub-hosted runners
+for d in "${JAVA_HOME_17_X64:-}" "$HOME"/.gradle/jdks/jdk-17* /usr/lib/jvm/java-17* /usr/lib/jvm/temurin-17*; do
+    [ -n "$d" ] && [ -x "$d/bin/java" ] && { JDK17="$d"; break; }
 done
 if [ -z "$JDK17" ]; then
     cat >&2 <<'EOF'
@@ -114,6 +115,13 @@ gradle_args=(
     -Porg.gradle.java.installations.auto-download=false
 )
 [ "$abi" = "all" ] || gradle_args+=("-PreactNativeArchitectures=$abi")
+
+# gradle.properties pins org.gradle.java.home to a local JDK 21; where that
+# path doesn't exist (CI) run the Gradle daemon on the JDK 17 found above
+pinned="$(sed -n 's/^org\.gradle\.java\.home=//p' "$ANDROID_DIR/gradle.properties")"
+if [ -n "$pinned" ] && [ ! -x "$pinned/bin/java" ]; then
+    gradle_args+=("-Dorg.gradle.java.home=$JDK17")
+fi
 
 read -r VERSION_NAME VERSION_CODE < <("$ROOT/scripts/apk-version.sh" "$ROOT") \
     || die "cannot derive version (see apk-version.sh error above)"
