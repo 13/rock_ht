@@ -2,6 +2,13 @@
 
 A prioritised list of improvements, based on this session's CI runs, the code reviews and a quick audit. Each item names the evidence, the fix and the size (S < 1h, M ≈ half a day, L = multi-day, which needs its own plan). Items marked ★ are real user-facing bugs.
 
+## Status (2026-09-25, evening)
+
+- **Done:** P0 #1–#4 (`2026-09-25-p0-fixes.md`); #11 milestone M1 (offline-first Tasks 1–9, see the commits up to `6413486`).
+- **Partly done:** #5, because `scripts/build-apk.sh` signs local builds with the release key but CI still signs with the debug key. #8, because `@rock_ht/sync` and `@rock_ht/local-db` now have tests but the web routes and UI still don't. #17 is still open because `today()` on the server gives the container's date.
+- **Found since:** the web export filename still takes its date from `toISOString()` (`apps/web/app/(app)/settings/page.tsx:120`).
+- **Next:** #5–#7 in `2026-09-25-apk-release-pipeline.md`.
+
 ## P0: broken now (small, do first)
 
 | # | Item | Evidence | Fix | Size |
