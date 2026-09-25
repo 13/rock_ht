@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { completionId, type SyncChange } from '@rock_ht/sync'
+import { completionId, isNewer, type SyncChange, type SyncRow } from '@rock_ht/sync'
 import { today } from '@rock_ht/utils'
 import { migrate } from '../schema'
 import { createLocalStore, type LocalStore } from '../store'
@@ -95,13 +95,47 @@ describe('LocalStore', () => {
 
     const profile = await s.getProfile('account-1')
     expect(profile).not.toBeNull()
-    expect(profile!.updated_at).toBe(original.updated_at)
+    // Floored to the epoch (not left at `original.updated_at`) so a genuinely older but real
+    // server profile still satisfies isNewer() on the next pull instead of losing to the placeholder.
+    expect(profile!.updated_at).toBe('1970-01-01T00:00:00.000Z')
     expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
     expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
     const out = await s.sync.readOutbox(100)
     expect(out.some((e) => e.change.table === 'profiles')).toBe(false)
     expect(out.some((e) => e.change.table === 'habits')).toBe(true)
     expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('claim on sign-in floors the local profile so an older-but-real server profile still wins the next pull', async () => {
+    const original = await s.ensureProfile(U)
+    await s.claim('account-1', { pushLocalProfile: false })
+
+    // A server profile last edited before this device's very first launch: older than the
+    // placeholder's original timestamp, but still newer than the epoch floor.
+    const serverUpdatedAt = new Date(new Date(original.updated_at).getTime() - 1000).toISOString()
+    const serverRow: SyncRow = {
+      ...(await s.sync.getRow('profiles', 'account-1'))!,
+      email: 'real@example.com', theme: 'forest', updated_at: serverUpdatedAt,
+    }
+
+    expect(isNewer(serverRow, await s.sync.getRow('profiles', 'account-1'))).toBe(true)
+
+    await s.sync.applyRemote([{ table: 'profiles', row: serverRow }], null)
+    const profile = await s.getProfile('account-1')
+    expect(profile!.email).toBe('real@example.com')
+    expect(profile!.theme).toBe('forest')
+  })
+
+  it('claim succeeds when a stale local profile row already holds the target id', async () => {
+    // e.g. left over from a previous sign-in to account-1, later disconnected.
+    await s.ensureProfile('account-1')
+    await s.ensureProfile(U)
+    await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+
+    await expect(s.claim('account-1', { pushLocalProfile: true })).resolves.toBeUndefined()
+
+    expect(await s.listHabits('account-1')).toHaveLength(1)
+    expect(await s.getProfile('account-1')).not.toBeNull()
   })
 
   it('updateProfile ignores undefined fields instead of nulling them', async () => {

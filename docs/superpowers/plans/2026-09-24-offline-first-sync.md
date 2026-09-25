@@ -359,7 +359,7 @@ git commit -m "feat(sync): add sync protocol types, LWW merge and deterministic 
 - Consumes: `SyncTable`, `SyncRow` from `@rock_ht/sync`.
 - Produces:
   - `type SqlParam = string | number | null`
-  - `interface SqlDriver { exec(sql: string): Promise<void>; run(sql: string, params?: SqlParam[]): Promise<void>; all<T>(sql: string, params?: SqlParam[]): Promise<T[]>; first<T>(sql: string, params?: SqlParam[]): Promise<T | null>; transaction(fn: (tx: SqlDriver) => Promise<void>): Promise<void> }`. Inside `fn`, run every statement on `tx`, never on the outer driver: on device the transaction is exclusive (`withExclusiveTransactionAsync`), so statements on the outer connection would not be part of it. Calling `tx.transaction(...)` runs flat inside the current transaction (no nesting).
+  - `interface SqlDriver { exec(sql: string): Promise<void>; run(sql: string, params?: SqlParam[]): Promise<void>; all<T>(sql: string, params?: SqlParam[]): Promise<T[]>; first<T>(sql: string, params?: SqlParam[]): Promise<T | null>; transaction(fn: (tx: SqlDriver) => Promise<void>): Promise<void> }`. Inside `fn`, run every statement on `tx`, never on the outer driver: on device the transaction is exclusive (`withExclusiveTransactionAsync`), so statements on the outer connection would not be part of it. Calling `tx.transaction(...)` runs flat inside the current transaction (no nesting). `transaction()` must serialize concurrent top-level callers (a second caller waits for the first to commit/rollback, never interleaved or rejected as busy) — the expo-sqlite driver (Task 4) wraps `withExclusiveTransactionAsync` in a promise-chain mutex to guarantee this, and the Task 3 local store relies on it to read-then-write atomically.
   - `migrate(driver: SqlDriver): Promise<void>`
   - `COLUMNS: Record<SyncTable, Record<string, 'text' | 'int' | 'bool' | 'json'>>`
   - `toSqlRow(table: SyncTable, row: SyncRow): Record<string, SqlParam>`
@@ -512,6 +512,8 @@ export interface SqlDriver {
   /**
    * Runs `fn` in one exclusive transaction. Use only `tx` inside `fn`.
    * `tx.transaction(g)` runs `g(tx)` flat inside the same transaction.
+   * Concurrent top-level calls are serialized: a second caller's `fn` starts only after the first's
+   * transaction commits or rolls back — implementations must queue, never interleave or reject as busy.
    */
   transaction(fn: (tx: SqlDriver) => Promise<void>): Promise<void>
 }
@@ -717,7 +719,7 @@ All `list*`/`get*` exclude rows with `deleted_at` set. Every mutation writes the
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { completionId, type SyncChange } from '@rock_ht/sync'
+import { completionId, isNewer, type SyncChange, type SyncRow } from '@rock_ht/sync'
 import { today } from '@rock_ht/utils'
 import { migrate } from '../schema'
 import { createLocalStore, type LocalStore } from '../store'
@@ -812,13 +814,47 @@ describe('LocalStore', () => {
 
     const profile = await s.getProfile('account-1')
     expect(profile).not.toBeNull()
-    expect(profile!.updated_at).toBe(original.updated_at)
+    // Floored to the epoch (not left at `original.updated_at`) so a genuinely older but real
+    // server profile still satisfies isNewer() on the next pull instead of losing to the placeholder.
+    expect(profile!.updated_at).toBe('1970-01-01T00:00:00.000Z')
     expect((await s.listCompletions('account-1'))[0]!.user_id).toBe('account-1')
     expect((await s.listJournal('account-1'))[0]!.user_id).toBe('account-1')
     const out = await s.sync.readOutbox(100)
     expect(out.some((e) => e.change.table === 'profiles')).toBe(false)
     expect(out.some((e) => e.change.table === 'habits')).toBe(true)
     expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('claim on sign-in floors the local profile so an older-but-real server profile still wins the next pull', async () => {
+    const original = await s.ensureProfile(U)
+    await s.claim('account-1', { pushLocalProfile: false })
+
+    // A server profile last edited before this device's very first launch: older than the
+    // placeholder's original timestamp, but still newer than the epoch floor.
+    const serverUpdatedAt = new Date(new Date(original.updated_at).getTime() - 1000).toISOString()
+    const serverRow: SyncRow = {
+      ...(await s.sync.getRow('profiles', 'account-1'))!,
+      email: 'real@example.com', theme: 'forest', updated_at: serverUpdatedAt,
+    }
+
+    expect(isNewer(serverRow, await s.sync.getRow('profiles', 'account-1'))).toBe(true)
+
+    await s.sync.applyRemote([{ table: 'profiles', row: serverRow }], null)
+    const profile = await s.getProfile('account-1')
+    expect(profile!.email).toBe('real@example.com')
+    expect(profile!.theme).toBe('forest')
+  })
+
+  it('claim succeeds when a stale local profile row already holds the target id', async () => {
+    // e.g. left over from a previous sign-in to account-1, later disconnected.
+    await s.ensureProfile('account-1')
+    await s.ensureProfile(U)
+    await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+
+    await expect(s.claim('account-1', { pushLocalProfile: true })).resolves.toBeUndefined()
+
+    expect(await s.listHabits('account-1')).toHaveLength(1)
+    expect(await s.getProfile('account-1')).not.toBeNull()
   })
 
   it('updateProfile ignores undefined fields instead of nulling them', async () => {
@@ -908,6 +944,12 @@ export interface LocalStoreDeps {
 export type LocalStore = ReturnType<typeof createLocalStore>
 
 const CURSOR_KEY = 'sync_cursor'
+
+/**
+ * Floor for a claimed-but-not-pushed profile's `updated_at` (see `claim`, `pushLocalProfile: false`).
+ * Older than any real timestamp, so `isNewer` (`@rock_ht/sync`) always accepts the server's profile.
+ */
+const EPOCH = '1970-01-01T00:00:00.000Z'
 
 const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
@@ -1143,27 +1185,36 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
   }
 
   /**
-   * Move offline data to a signed-in account and queue it for upload. The local device only ever
-   * tracks one active local identity's rows at a time (see `resolveUserId` in the mobile app), so every
-   * row is rewritten to `toUserId` unconditionally.
+   * Move offline data to a signed-in account and queue it for upload.
+   *
+   * Invariant: the local device only ever tracks one active local identity's rows at a time (see
+   * `resolveUserId` in the mobile app), so every row is rewritten to `toUserId` unconditionally.
    *
    * `pushLocalProfile: true` (new account sign-up): the local profile is rewritten to `toUserId`,
    * `updated_at` bumped, and queued, so it wins LWW once pushed.
    *
    * `pushLocalProfile: false` (sign-in to an existing account): the profile row is rewritten to
-   * `toUserId` locally so the app keeps working until the next pull, but its `updated_at` is NOT
-   * bumped and it is NOT queued — otherwise the device's placeholder profile (empty email, defaults)
-   * would win LWW over the real server profile on push.
+   * `toUserId` locally so the app keeps working until the next pull, but it is NOT queued — otherwise
+   * the device's placeholder profile (empty email, defaults) would win LWW over the real server
+   * profile on push. Its `updated_at` is floored to `EPOCH` rather than left at the placeholder's real
+   * timestamp: `isNewer` (`@rock_ht/sync`) only accepts a pulled row when it's strictly newer than the
+   * local one, so a server profile last edited before this device's first launch would otherwise be
+   * older than the placeholder and get rejected by the pull, and then overwritten by the next push.
+   * The epoch floor guarantees any real server profile, however old, wins the next pull.
    */
   async function claim(toUserId: string, opts: { pushLocalProfile: boolean }) {
     await driver.transaction(async (tx) => {
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ?`, [toUserId, now()])
       }
+      // A profile row may already sit at `toUserId` (e.g. a previous sign-in to this same account,
+      // later disconnected). Drop it first so re-pointing the active row's id below can't collide with
+      // it on the primary key, then only touch rows that aren't already `toUserId`.
+      await tx.run('DELETE FROM profiles WHERE id = ?', [toUserId])
       if (opts.pushLocalProfile) {
-        await tx.run('UPDATE profiles SET id = ?, updated_at = ?', [toUserId, now()])
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id <> ?', [toUserId, now(), toUserId])
       } else {
-        await tx.run('UPDATE profiles SET id = ?', [toUserId])
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id <> ?', [toUserId, EPOCH, toUserId])
       }
       await tx.run('DELETE FROM outbox')
       await setMeta(CURSOR_KEY, null, tx)
@@ -1211,11 +1262,11 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
 
 Add `export * from './store'` to `src/index.ts`.
 
-Note on `claim`: on sign-up (`pushLocalProfile: true`) the local profile is re-queued too, so the server needs the profile to exist before push. Both backends create it at signup (Supabase trigger `handle_new_user`; self-host in Task 12), and `sync_push_for` only updates profiles. On sign-in (`pushLocalProfile: false`) the profile is rewritten locally but not queued, so the account's existing server profile is left alone and wins on the next pull instead of being overwritten by the device's placeholder profile.
+Note on `claim`: on sign-up (`pushLocalProfile: true`) the local profile is re-queued too, so the server needs the profile to exist before push. Both backends create it at signup (Supabase trigger `handle_new_user`; self-host in Task 12), and `sync_push_for` only updates profiles. On sign-in (`pushLocalProfile: false`) the profile is rewritten locally but not queued, and its `updated_at` is floored to `1970-01-01T00:00:00.000Z` rather than left at the placeholder's real timestamp — `isNewer` (`@rock_ht/sync`) only accepts a pulled row that is strictly newer than the local one, so a server profile last edited before this device's first launch would otherwise be older than the placeholder and get rejected by the pull. The epoch floor guarantees the account's existing server profile always wins the next pull instead of being overwritten by the device's placeholder profile. A profile row already sitting at `toUserId` (e.g. a prior sign-in to this same account, later disconnected) is deleted before the rewrite so the primary key doesn't collide.
 
 - [ ] **Step 4: Run, verify pass**
 
-Run: `npm test --workspace=packages/local-db` → PASS (15 tests: 4 from Task 2, 11 store tests).
+Run: `npm test --workspace=packages/local-db` → PASS (17 tests: 4 from Task 2, 13 store tests).
 Run: `npx tsc --noEmit -p packages/local-db` → no errors.
 Run the timezone matrix once: `for tz in UTC Pacific/Kiritimati Pacific/Pago_Pago America/New_York; do TZ=$tz npm test --workspace=packages/local-db || break; done` → PASS in all four.
 
@@ -1256,27 +1307,41 @@ Do **not** add `expo-sqlite` to `app.json` `plugins`: `apps/mobile/android/` is 
 import * as SQLite from "expo-sqlite";
 import type { SqlDriver, SqlParam } from "@rock_ht/local-db";
 
-/**
- * `inTx`: `db` is the connection of a running exclusive transaction; nested
- * `transaction()` calls then run flat on it.
- */
-function wrap(db: SQLite.SQLiteDatabase, inTx: boolean): SqlDriver {
-  const driver: SqlDriver = {
-    exec: (sql) => db.execAsync(sql),
-    run: async (sql, params: SqlParam[] = []) => { await db.runAsync(sql, params); },
-    all: <T,>(sql: string, params: SqlParam[] = []) => db.getAllAsync<T>(sql, params),
-    first: <T,>(sql: string, params: SqlParam[] = []) => db.getFirstAsync<T>(sql, params),
-    // Exclusive: a background sync applyRemote can't interleave with a user write,
-    // which withTransactionAsync (shared connection) would allow.
-    transaction: (fn) =>
-      inTx ? fn(driver) : db.withExclusiveTransactionAsync((txn) => fn(wrap(txn, true))),
-  };
-  return driver;
-}
-
 export async function createExpoSqliteDriver(name = "rock_ht.db"): Promise<SqlDriver> {
   const db = await SQLite.openDatabaseAsync(name);
   await db.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = OFF;");
+  // Serializes concurrent top-level transaction() calls: SqlDriver.transaction() promises "one
+  // exclusive transaction" (packages/local-db/src/driver.ts) — a second caller must wait for the
+  // first's commit/rollback, never interleave or throw "database is locked". Plain
+  // withExclusiveTransactionAsync calls queue on the native side per-database, but that queuing isn't
+  // part of its documented contract, so a promise-chain mutex makes the guarantee explicit and testable
+  // (mirrors packages/local-db/src/__tests__/helpers.ts's openTestDriver, whose race test depends on it).
+  let queue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * `inTx`: `conn` is the connection of a running exclusive transaction; nested
+   * `transaction()` calls then run flat on it.
+   */
+  function wrap(conn: SQLite.SQLiteDatabase, inTx: boolean): SqlDriver {
+    const driver: SqlDriver = {
+      exec: (sql) => conn.execAsync(sql),
+      run: async (sql, params: SqlParam[] = []) => { await conn.runAsync(sql, params); },
+      all: <T,>(sql: string, params: SqlParam[] = []) => conn.getAllAsync<T>(sql, params),
+      first: <T,>(sql: string, params: SqlParam[] = []) => conn.getFirstAsync<T>(sql, params),
+      // Exclusive: a background sync applyRemote can't interleave with a user write,
+      // which withTransactionAsync (shared connection) would allow.
+      transaction: (fn) => {
+        if (inTx) return fn(driver);
+        const result = queue.then(() =>
+          conn.withExclusiveTransactionAsync((txn) => fn(wrap(txn, true))),
+        );
+        queue = result.catch(() => undefined);
+        return result;
+      },
+    };
+    return driver;
+  }
+
   return wrap(db, false);
 }
 ```
@@ -3976,7 +4041,7 @@ Outline only; write a dedicated plan before starting:
 
 - **Clock skew:** LWW uses device clocks, so a phone set 1 h ahead wins conflicts for an hour. That's acceptable for single-user habit data. If it becomes a problem, switch `updated_at` to a hybrid logical clock (HLC) string, which keeps the same comparison semantics.
 - **Completions merge:** the deterministic id plus LWW means that if one device toggles off and another toggles on for the same day, the later tap wins. That's the intended behaviour.
-- **Profiles are update-only via sync:** the server creates the profile at signup, so a push before signup finishes is a no-op, and `claim(accountId, { pushLocalProfile: true })` re-queues the profile afterwards on sign-up. On sign-in (`pushLocalProfile: false`), the local profile is rewritten but not queued, so the account's real server profile is left alone and wins on the next pull.
+- **Profiles are update-only via sync:** the server creates the profile at signup, so a push before signup finishes is a no-op, and `claim(accountId, { pushLocalProfile: true })` re-queues the profile afterwards on sign-up. On sign-in (`pushLocalProfile: false`), the local profile is rewritten but not queued, and its `updated_at` is floored to `1970-01-01T00:00:00.000Z` (rather than left at the placeholder's real timestamp) so `isNewer` always accepts the account's real server profile on the next pull, even one last edited before this device's first launch.
 - **`habit_streaks` on Supabase** remains a server cache for the web app only. Mobile never reads it.
 - **Reminders are not context-aware yet:** they fire at the set time even if the habit is already done that day, and `times_per_week` habits are reminded daily. Skipping done days needs per-day one-shot triggers rescheduled after each completion; that is a separate change on top of Task 7's `rebuildReminders`.
 - **Backup import restores deletions:** a backup row replaces a local tombstone (Task 8 import rules), because "restore from backup" is the purpose of the feature. Live local rows that are newer still win.

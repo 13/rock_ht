@@ -19,6 +19,12 @@ export type LocalStore = ReturnType<typeof createLocalStore>
 
 const CURSOR_KEY = 'sync_cursor'
 
+/**
+ * Floor for a claimed-but-not-pushed profile's `updated_at` (see `claim`, `pushLocalProfile: false`).
+ * Older than any real timestamp, so `isNewer` (`@rock_ht/sync`) always accepts the server's profile.
+ */
+const EPOCH = '1970-01-01T00:00:00.000Z'
+
 const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
 /** Drop keys whose value is `undefined` so a partial input never overwrites a column with null. */
@@ -253,27 +259,36 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
   }
 
   /**
-   * Move offline data to a signed-in account and queue it for upload. The local device only ever
-   * tracks one active local identity's rows at a time (see `resolveUserId` in the mobile app), so every
-   * row is rewritten to `toUserId` unconditionally.
+   * Move offline data to a signed-in account and queue it for upload.
+   *
+   * Invariant: the local device only ever tracks one active local identity's rows at a time (see
+   * `resolveUserId` in the mobile app), so every row is rewritten to `toUserId` unconditionally.
    *
    * `pushLocalProfile: true` (new account sign-up): the local profile is rewritten to `toUserId`,
    * `updated_at` bumped, and queued, so it wins LWW once pushed.
    *
    * `pushLocalProfile: false` (sign-in to an existing account): the profile row is rewritten to
-   * `toUserId` locally so the app keeps working until the next pull, but its `updated_at` is NOT
-   * bumped and it is NOT queued — otherwise the device's placeholder profile (empty email, defaults)
-   * would win LWW over the real server profile on push.
+   * `toUserId` locally so the app keeps working until the next pull, but it is NOT queued — otherwise
+   * the device's placeholder profile (empty email, defaults) would win LWW over the real server
+   * profile on push. Its `updated_at` is floored to `EPOCH` rather than left at the placeholder's real
+   * timestamp: `isNewer` (`@rock_ht/sync`) only accepts a pulled row when it's strictly newer than the
+   * local one, so a server profile last edited before this device's first launch would otherwise be
+   * older than the placeholder and get rejected by the pull, and then overwritten by the next push.
+   * The epoch floor guarantees any real server profile, however old, wins the next pull.
    */
   async function claim(toUserId: string, opts: { pushLocalProfile: boolean }) {
     await driver.transaction(async (tx) => {
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?, updated_at = ?`, [toUserId, now()])
       }
+      // A profile row may already sit at `toUserId` (e.g. a previous sign-in to this same account,
+      // later disconnected). Drop it first so re-pointing the active row's id below can't collide with
+      // it on the primary key, then only touch rows that aren't already `toUserId`.
+      await tx.run('DELETE FROM profiles WHERE id = ?', [toUserId])
       if (opts.pushLocalProfile) {
-        await tx.run('UPDATE profiles SET id = ?, updated_at = ?', [toUserId, now()])
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id <> ?', [toUserId, now(), toUserId])
       } else {
-        await tx.run('UPDATE profiles SET id = ?', [toUserId])
+        await tx.run('UPDATE profiles SET id = ?, updated_at = ? WHERE id <> ?', [toUserId, EPOCH, toUserId])
       }
       await tx.run('DELETE FROM outbox')
       await setMeta(CURSOR_KEY, null, tx)
