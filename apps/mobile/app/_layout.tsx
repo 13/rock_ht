@@ -40,7 +40,7 @@ function AuthGuard() {
 
     // Already handled onboarding check this session
     if (checkedOnboarding.current) {
-      if (inAuthGroup) router.replace("/(tabs)/");
+      if (inAuthGroup) router.replace("/(tabs)");
       SplashScreen.hideAsync();
       return;
     }
@@ -59,7 +59,7 @@ function AuthGuard() {
         if (profile && !profile.onboarding_completed && !inOnboarding) {
           router.replace("/onboarding");
         } else if (inAuthGroup) {
-          router.replace("/(tabs)/");
+          router.replace("/(tabs)");
         }
       } finally {
         SplashScreen.hideAsync();

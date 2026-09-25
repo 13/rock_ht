@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Expo Router types
+        run: npm run typegen --workspace=apps/mobile
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+
       - name: Type check all packages
         run: npm run type-check
 

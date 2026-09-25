@@ -322,7 +322,7 @@ export default function OnboardingScreen() {
       });
     }
     hapticSuccess();
-    router.replace("/(tabs)/");
+    router.replace("/(tabs)");
   }
 
   return (
