@@ -17,6 +17,8 @@ import { useNotifications } from "@/hooks/use-notifications";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 import { hapticLight, hapticError } from "@/lib/haptics";
 import { exportToShareSheet, importFromPicker } from "@/lib/backup";
+import { useTheme } from "@/theme/theme-provider";
+import { PALETTES, THEME_LABELS, THEME_NAMES, type ThemeName } from "@/theme/palettes";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -133,6 +135,51 @@ function Divider() {
   );
 }
 
+function ThemeSwatch({
+  name,
+  active,
+  onPress,
+}: {
+  name: ThemeName;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const palette = PALETTES[name];
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{ alignItems: "center", gap: 6, width: 60 }}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: palette.background,
+          borderWidth: 3,
+          borderColor: palette.primary,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {active && (
+          <Ionicons name="checkmark-circle" size={20} color={palette.primary} />
+        )}
+      </View>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: active ? "700" : "500",
+          color: active ? "#f4f4f8" : "#9ca3af",
+        }}
+      >
+        {THEME_LABELS[name]}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { store, userId } = useLocal();
@@ -140,6 +187,12 @@ export default function SettingsScreen() {
     useNotifications();
   const [notifEnabled, setNotifEnabled] = useState(false);
   const queryClient = useQueryClient();
+  const { name: activeTheme, setTheme } = useTheme();
+
+  async function handleThemeChange(next: ThemeName) {
+    hapticLight();
+    await setTheme(next);
+  }
 
   function handleSignOut() {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -277,6 +330,26 @@ export default function SettingsScreen() {
             </View>
           </View>
         </SectionCard>
+
+        {/* Appearance */}
+        <SectionHeader title="Appearance" />
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginHorizontal: 20,
+            paddingHorizontal: 4,
+          }}
+        >
+          {THEME_NAMES.map((themeName) => (
+            <ThemeSwatch
+              key={themeName}
+              name={themeName}
+              active={activeTheme === themeName}
+              onPress={() => handleThemeChange(themeName)}
+            />
+          ))}
+        </View>
 
         {/* Notifications */}
         <SectionHeader title="Notifications" />

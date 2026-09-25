@@ -8,18 +8,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand colors (same hex as web for consistency)
-        primary: "#6366f1",
+        // Brand colors that don't change with the theme
         "primary-dark": "#4f46e5",
         success: "#22c55e",
         streak: "#f97316",
-        // Dark theme defaults
-        background: "#0a0a0f",
-        card: "#111118",
-        border: "#1e1e2a",
-        foreground: "#f4f4f8",
-        "muted-fg": "#6b6b80",
-        muted: "#1e1e2a",
+        // Theme colors: read from CSS variables set by ThemeProvider (see theme/theme-provider.tsx)
+        background: "rgb(var(--background) / <alpha-value>)",
+        card: "rgb(var(--card) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        foreground: "rgb(var(--foreground) / <alpha-value>)",
+        primary: "rgb(var(--primary) / <alpha-value>)",
+        "muted-foreground": "rgb(var(--muted-foreground) / <alpha-value>)",
+        "muted-fg": "rgb(var(--muted-foreground) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "System"],

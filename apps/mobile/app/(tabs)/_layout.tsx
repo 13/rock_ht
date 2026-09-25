@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "@/theme/theme-provider";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -22,16 +23,17 @@ export default function TabsLayout() {
   // bar (and the iOS home indicator) itself
   const { bottom } = useSafeAreaInsets();
   const bottomPadding = Math.max(bottom, 8);
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#6366f1",
-        tabBarInactiveTintColor: "#6b6b80",
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: "#111118",
-          borderTopColor: "#1e1e2a",
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
           borderTopWidth: 1,
           paddingBottom: bottomPadding,
           paddingTop: 6,
@@ -43,6 +45,7 @@ export default function TabsLayout() {
           fontWeight: "500",
           marginTop: 2,
         },
+        sceneStyle: { backgroundColor: colors.background },
       }}
     >
       {TABS.map((tab) => (

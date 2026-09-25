@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { SwipeableHabitRow } from "@/components/habits/swipeable-habit-row";
@@ -69,8 +68,6 @@ export default function TodayScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0f" }} edges={["top"]}>
-      <StatusBar style="light" />
-
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 32 }}

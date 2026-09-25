@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppProviders } from "@/providers";
 import { useProfile } from "@/hooks/use-profile";
 import { useRebuildRemindersOnLaunch } from "@/hooks/use-reminders";
+import { ThemeProvider } from "@/theme/theme-provider";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,7 +38,9 @@ function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppProviders>
-        <OnboardingGuard />
+        <ThemeProvider>
+          <OnboardingGuard />
+        </ThemeProvider>
       </AppProviders>
     </GestureHandlerRootView>
   );
