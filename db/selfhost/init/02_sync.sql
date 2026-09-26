@@ -19,18 +19,18 @@
 
 -- >>> SYNC FUNCTIONS (keep identical to supabase/migrations/008_sync.sql)
 
--- Serializes every writer of one user's synced rows until its transaction ends.
+-- The per-user sync lock: pg_advisory_xact_lock(hashtextextended(<user id>::text, 0)).
+-- It serializes every writer of one user's synced rows until its transaction ends.
 -- server_seq is taken inside the row trigger, but transactions commit out of order:
 -- without this, a push could commit seq 11 while another still holds seq 10
 -- uncommitted, a concurrent pull would return 11 and advance the client's cursor
 -- past 10, and row 10 would never be pulled. Pulls are per user, so a per-user
 -- lock is enough; different users never wait on each other.
-create or replace function public.sync_lock_user(p_user uuid)
-returns void language plpgsql as $$
-begin
-  perform pg_advisory_xact_lock(hashtextextended(p_user::text, 0));
-end;
-$$;
+-- It is taken inline (bump_sync_seq, sync_push_for) rather than through a helper
+-- function: on Supabase any function the writer may execute is also an RPC, and a
+-- callable lock on arbitrary user ids would let one user stall another's writes.
+-- An earlier version had that helper; drop it.
+drop function if exists public.sync_lock_user(uuid);
 
 -- An instant as `Date.prototype.toISOString()` prints it (`2026-09-24T20:00:00.000Z`).
 -- to_jsonb would emit microseconds and a `+00:00` offset, which Hermes' Date parser
@@ -55,12 +55,12 @@ $$;
 create or replace function public.bump_sync_seq()
 returns trigger language plpgsql as $$
 begin
-  -- Take the user's lock before the seq (see sync_lock_user), so writers that bypass
+  -- Take the user's sync lock (see above) before the seq, so writers that bypass
   -- sync_push_for (the web app, SQL) can't open a cursor gap either.
   if tg_table_name = 'profiles' then
-    perform public.sync_lock_user(new.id);
+    perform pg_advisory_xact_lock(hashtextextended(new.id::text, 0));
   else
-    perform public.sync_lock_user(new.user_id);
+    perform pg_advisory_xact_lock(hashtextextended(new.user_id::text, 0));
   end if;
   new.server_seq := nextval('public.sync_seq');
   -- Web/SQL writers that don't set updated_at still advance it; sync writers set it explicitly.
@@ -102,7 +102,7 @@ declare
   v_onboarded boolean;
   v_skipped jsonb := '[]'::jsonb;
 begin
-  perform public.sync_lock_user(p_user);
+  perform pg_advisory_xact_lock(hashtextextended(p_user::text, 0));
   -- Every synced row references the profile. If the sign-up hook failed and this push
   -- carries no profile change, create a minimal one (dated just after the epoch, so any
   -- device's profile push still wins it); otherwise every habit would fail its foreign key.

@@ -140,7 +140,8 @@ export async function archiveHabit(
   const { error } = await client
     .from("habits")
     .update({ is_archived: true, updated_at: new Date().toISOString() })
-    .eq("id", habitId);
+    .eq("id", habitId)
+    .is("deleted_at", null);
 
   if (error) throw error;
 }

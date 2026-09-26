@@ -2,6 +2,7 @@ import { today, subtractDays } from "@rock_ht/utils";
 import { completionId } from "@rock_ht/sync";
 import type { TypedSupabaseClient } from "./client";
 import { softDelete } from "./soft-delete";
+import type { CompletionRow, ToggleCompletionInput, TablesInsert } from "@rock_ht/types";
 
 /**
  * Completions are kept when their habit is soft-deleted (as on mobile, where a restored habit gets
@@ -15,7 +16,6 @@ function stripHabit(rows: unknown[] | null): CompletionRow[] {
     return row;
   });
 }
-import type { CompletionRow, ToggleCompletionInput, TablesInsert } from "@rock_ht/types";
 
 export async function getCompletions(
   client: TypedSupabaseClient,
@@ -73,18 +73,15 @@ export async function getCompletionForDate(
 ): Promise<CompletionRow | null> {
   const { data, error } = await client
     .from("habit_completions")
-    .select("*")
+    .select(LIVE_COMPLETIONS)
     .eq("habit_id", habitId)
     .eq("completed_date", dateStr)
     .is("deleted_at", null)
-    .single();
+    .is("habits.deleted_at", null)
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw error;
-  }
-
-  return data;
+  if (error) throw error;
+  return data ? stripHabit([data])[0]! : null;
 }
 
 export async function addCompletion(

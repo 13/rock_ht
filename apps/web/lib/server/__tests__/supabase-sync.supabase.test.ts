@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { completionId } from '@rock_ht/sync'
 import {
-  addCompletion, createHabit, createJournalEntry, deleteHabit, deleteJournalEntry, getCompletions,
+  addCompletion, archiveHabit, createHabit, createJournalEntry, deleteHabit, deleteJournalEntry, getCompletionForDate, getCompletions,
   getHabit, getHabits, getJournalEntries, getTodayCompletions, removeCompletion, updateHabit, type TypedSupabaseClient,
 } from '@rock_ht/db'
 
@@ -25,6 +25,22 @@ const API_URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321'
 // The Supabase CLI's fixed local demo anon key (not a secret; `supabase status` prints it).
 const ANON_KEY = process.env.SUPABASE_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+
+// Refuse to run against anything but a local stack unless explicitly told to.
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+if (process.env.ALLOW_REMOTE_SUPABASE_TESTS !== '1') {
+  for (const [name, url] of [['SUPABASE_DB_URL', DB_URL], ['SUPABASE_URL', API_URL]] as const) {
+    let host: string
+    try {
+      host = new URL(url).hostname
+    } catch {
+      throw new Error(`${name} is not a valid URL`)
+    }
+    if (!LOCAL_HOSTS.has(host)) {
+      throw new Error(`${name} points at ${host}, not a local Supabase stack; set ALLOW_REMOTE_SUPABASE_TESTS=1 to override`)
+    }
+  }
+}
 
 const pool = new Pool({ connectionString: DB_URL })
 const ISO_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
@@ -168,6 +184,63 @@ describe('008: schema and triggers', () => {
       "select column_default from information_schema.columns where table_schema = 'public' and table_name = 'habit_completions' and column_name = 'id'")
     expect(rows[0].column_default).toBeNull()
   })
+
+  it('derives the completion id in the database, whatever the writer sends', async () => {
+    const a = await authUser()
+    const h = randomUUID()
+    await as('authenticated', a, async (c) => {
+      await c.query("insert into public.habits (id, user_id, title) values ($1, $2, 'web habit')", [h, a])
+      // A stale web bundle sends no id; a buggy writer sends a random one.
+      await c.query("insert into public.habit_completions (habit_id, user_id, completed_date) values ($1, $2, '2026-01-03')", [h, a])
+      await c.query("insert into public.habit_completions (id, habit_id, user_id, completed_date) values ($1, $2, $3, '2026-01-04')",
+        [randomUUID(), h, a])
+    })
+    const { rows } = await pool.query(
+      "select id, to_char(completed_date, 'YYYY-MM-DD') as d from public.habit_completions where habit_id = $1 order by completed_date", [h])
+    expect(rows).toEqual([
+      { id: completionId(h, '2026-01-03'), d: '2026-01-03' },
+      { id: completionId(h, '2026-01-04'), d: '2026-01-04' },
+    ])
+    // An id-less upsert of the same day hits the same row instead of failing the unique check.
+    await as('authenticated', a, (c) => c.query(
+      `insert into public.habit_completions (habit_id, user_id, completed_date, value) values ($1, $2, '2026-01-03', 5)
+       on conflict (id) do update set value = excluded.value`, [h, a]))
+    expect((await one('select value from public.habit_completions where id = $1', [completionId(h, '2026-01-03')])).value).toBe(5)
+  })
+
+  it('refuses hard deletes of synced rows to API roles (deletes are soft)', async () => {
+    const a = await authUser()
+    const h = randomUUID()
+    const j = randomUUID()
+    expect(await push(a, [habit(h, 'Keep', 1), completion(h, '2026-01-02', 1), journal(j, 1)])).toEqual([])
+    const deleted = await as('authenticated', a, async (c) => [
+      (await c.query('delete from public.habit_completions where habit_id = $1', [h])).rowCount,
+      (await c.query('delete from public.journal_entries where id = $1', [j])).rowCount,
+      (await c.query('delete from public.habits where id = $1', [h])).rowCount,
+    ])
+    expect(deleted).toEqual([0, 0, 0])
+    expect(await one(
+      `select (select count(*)::int from public.habits where id = $1) as h,
+              (select count(*)::int from public.habit_completions where habit_id = $1) as c,
+              (select count(*)::int from public.journal_entries where id = $2) as j`, [h, j]))
+      .toEqual({ h: 1, c: 1, j: 1 })
+    const { rows } = await pool.query(
+      "select policyname from pg_policies where schemaname = 'public' and cmd = 'DELETE' and tablename in ('habits', 'habit_completions', 'journal_entries')")
+    expect(rows).toEqual([])
+  })
+
+  it('still cascades an account deletion (auth.users) to every synced row', async () => {
+    const a = await authUser()
+    const h = randomUUID()
+    await push(a, [habit(h, 'Gone', 1), completion(h, '2026-01-02', 1), journal(randomUUID(), 1)])
+    await pool.query('delete from auth.users where id = $1', [a])
+    expect(await one(
+      `select (select count(*)::int from public.profiles where id = $1) +
+              (select count(*)::int from public.habits where user_id = $1) +
+              (select count(*)::int from public.habit_completions where user_id = $1) +
+              (select count(*)::int from public.journal_entries where user_id = $1) as n`, [a]))
+      .toEqual({ n: 0 })
+  })
 })
 
 describe('008: RPC permissions', () => {
@@ -178,6 +251,15 @@ describe('008: RPC permissions', () => {
         .rejects.toThrow(/permission denied/)
       await expect(as(role, a, (c) => c.query('select public.sync_pull_for($1, 0, 10)', [a])))
         .rejects.toThrow(/permission denied/)
+    }
+  })
+
+  it('exposes no advisory-lock helper, and no sync helpers to anon', async () => {
+    expect((await one("select to_regprocedure('public.sync_lock_user(uuid)') as p")).p).toBeNull()
+    await expect(as('anon', null, (c) => c.query("select public.completion_id(gen_random_uuid(), '2026-01-01')")))
+      .rejects.toThrow(/permission denied/)
+    for (const role of ['authenticated', 'anon'] as const) {
+      await expect(as(role, null, (c) => c.query('select public.sync_ts(now())'))).rejects.toThrow(/permission denied/)
     }
   })
 
@@ -344,6 +426,9 @@ describe('008 end to end: GoTrue sign-up, PostgREST RPCs and the @rock_ht/db web
     expect(listed.map((x) => x.id)).toEqual([c.id])
     expect(listed[0]).not.toHaveProperty('habits')
     expect((await getTodayCompletions(db, id, '2026-01-05')).map((x) => x.id)).toEqual([c.id])
+    const byDate = await getCompletionForDate(db, h.id, '2026-01-05')
+    expect(byDate?.id).toBe(c.id)
+    expect(byDate).not.toHaveProperty('habits')
 
     await removeCompletion(db, h.id, '2026-01-05')
     expect(await getCompletions(db, id, { habitId: h.id })).toEqual([])
@@ -371,6 +456,11 @@ describe('008 end to end: GoTrue sign-up, PostgREST RPCs and the @rock_ht/db web
     expect((await one('select count(*)::int as n from public.habit_completions where habit_id = $1 and deleted_at is null', [h.id])).n).toBe(1)
     expect(await getCompletions(db, id, { habitId: h.id })).toEqual([])
     expect(await getTodayCompletions(db, id, '2026-01-05')).toEqual([])
+    expect(await getCompletionForDate(db, h.id, '2026-01-05')).toBeNull()
+    // Archiving a deleted habit (a stale tab) leaves the tombstone alone.
+    const tombBefore = await one('select updated_at, is_archived from public.habits where id = $1', [h.id])
+    await archiveHabit(db, h.id)
+    expect(await one('select updated_at, is_archived from public.habits where id = $1', [h.id])).toEqual(tombBefore)
 
     // Mobile pulls the tombstones.
     const page = (await db.rpc('sync_pull', { p_cursor: 0, p_limit: 500 })).data as unknown as Pulled

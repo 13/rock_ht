@@ -40,6 +40,9 @@ export default async function AppLayout({
           user.user_metadata?.full_name ??
           user.user_metadata?.name ??
           user.email!.split("@")[0],
+        // Dated just after the epoch, like the sign-up trigger's profile: a placeholder that any
+        // device's profile push must win under last-write-wins.
+        updated_at: "1970-01-01T00:00:00.001Z",
       })
       .select()
       .single();

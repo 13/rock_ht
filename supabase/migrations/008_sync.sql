@@ -10,8 +10,11 @@
 --   expose them: they are revoked from every API role and reached only through the auth.uid()-bound
 --   wrappers sync_push/sync_pull at the end of this file (security definer, like the self-host
 --   routes' database user, so ownership checks and `skipped` reporting see every row, as there);
--- * RLS stays on for the web app's direct table access; deletes of synced rows are soft
---   (deleted_at), so the delete policies are simply no longer used by the clients.
+-- * RLS stays on for the web app's direct table access. Deletes of synced rows are soft
+--   (deleted_at), and the API roles lose their delete policies, so a stale web bundle can't
+--   hard-delete a row (a hard delete never reaches offline devices). Account deletion still
+--   cascades from auth.users (foreign-key actions aren't subject to RLS);
+-- * a before-insert trigger gives every completion its deterministic id, whatever the writer sent.
 --
 -- Verify locally (never against the hosted project): `npm run db:start && npx supabase db reset`,
 -- then `npm run test:supabase --workspace=apps/web`.
@@ -185,18 +188,18 @@ create or replace trigger on_completion_updated
 
 -- >>> SYNC FUNCTIONS (keep identical to supabase/migrations/008_sync.sql)
 
--- Serializes every writer of one user's synced rows until its transaction ends.
+-- The per-user sync lock: pg_advisory_xact_lock(hashtextextended(<user id>::text, 0)).
+-- It serializes every writer of one user's synced rows until its transaction ends.
 -- server_seq is taken inside the row trigger, but transactions commit out of order:
 -- without this, a push could commit seq 11 while another still holds seq 10
 -- uncommitted, a concurrent pull would return 11 and advance the client's cursor
 -- past 10, and row 10 would never be pulled. Pulls are per user, so a per-user
 -- lock is enough; different users never wait on each other.
-create or replace function public.sync_lock_user(p_user uuid)
-returns void language plpgsql as $$
-begin
-  perform pg_advisory_xact_lock(hashtextextended(p_user::text, 0));
-end;
-$$;
+-- It is taken inline (bump_sync_seq, sync_push_for) rather than through a helper
+-- function: on Supabase any function the writer may execute is also an RPC, and a
+-- callable lock on arbitrary user ids would let one user stall another's writes.
+-- An earlier version had that helper; drop it.
+drop function if exists public.sync_lock_user(uuid);
 
 -- An instant as `Date.prototype.toISOString()` prints it (`2026-09-24T20:00:00.000Z`).
 -- to_jsonb would emit microseconds and a `+00:00` offset, which Hermes' Date parser
@@ -221,12 +224,12 @@ $$;
 create or replace function public.bump_sync_seq()
 returns trigger language plpgsql as $$
 begin
-  -- Take the user's lock before the seq (see sync_lock_user), so writers that bypass
+  -- Take the user's sync lock (see above) before the seq, so writers that bypass
   -- sync_push_for (the web app, SQL) can't open a cursor gap either.
   if tg_table_name = 'profiles' then
-    perform public.sync_lock_user(new.id);
+    perform pg_advisory_xact_lock(hashtextextended(new.id::text, 0));
   else
-    perform public.sync_lock_user(new.user_id);
+    perform pg_advisory_xact_lock(hashtextextended(new.user_id::text, 0));
   end if;
   new.server_seq := nextval('public.sync_seq');
   -- Web/SQL writers that don't set updated_at still advance it; sync writers set it explicitly.
@@ -268,7 +271,7 @@ declare
   v_onboarded boolean;
   v_skipped jsonb := '[]'::jsonb;
 begin
-  perform public.sync_lock_user(p_user);
+  perform pg_advisory_xact_lock(hashtextextended(p_user::text, 0));
   -- Every synced row references the profile. If the sign-up hook failed and this push
   -- carries no profile change, create a minimal one (dated just after the epoch, so any
   -- device's profile push still wins it); otherwise every habit would fail its foreign key.
@@ -460,8 +463,41 @@ $$;
 -- function to anon and authenticated, so revoke from those explicitly, not just from public.
 revoke execute on function public.sync_push_for(uuid, jsonb) from public, anon, authenticated;
 revoke execute on function public.sync_pull_for(uuid, bigint, int) from public, anon, authenticated;
--- Only row writers need the lock (bump_sync_seq runs as the writer); anon never writes synced rows.
-revoke execute on function public.sync_lock_user(uuid) from public, anon;
+-- Helpers of the shared block that no client calls: sync_ts only formats pull output (which runs
+-- as this file's owner); completion_id stays executable by authenticated, because the
+-- completions_derive_id trigger below runs as the writer (PostgREST's authenticated role).
+revoke execute on function public.sync_ts(timestamptz) from public, anon, authenticated;
+revoke execute on function public.completion_id(uuid, date) from public, anon;
+grant execute on function public.completion_id(uuid, date) to authenticated;
+
+-- Hard deletes of synced rows would never reach offline devices (only tombstones sync), so the API
+-- roles can't delete them at all. The auth.users -> profiles -> habits/... cascade of an account
+-- deletion is unaffected: foreign-key actions aren't subject to RLS.
+drop policy if exists "habits: delete own" on public.habits;
+drop policy if exists "completions: delete own" on public.habit_completions;
+drop policy if exists "journal: delete own" on public.journal_entries;
+
+-- Every completion gets public.completion_id(habit_id, completed_date) as its id, whatever the writer
+-- sent: a web bundle from before 008 sends none (the column has no default), and a random id would
+-- make devices that derive the id collide with it on unique (habit_id, completed_date). A before
+-- trigger runs ahead of the not-null, primary key and unique checks, and of the ON CONFLICT arbiter,
+-- so an id-less upsert of an existing day merges into its row. sync_push_for already sends this id,
+-- so the trigger changes nothing for it. Inserts only: no client moves a completion to another habit
+-- or day.
+create or replace function public.completion_derive_id()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.id := public.completion_id(new.habit_id, new.completed_date);
+  return new;
+end;
+$$;
+revoke execute on function public.completion_derive_id() from public, anon, authenticated;
+
+create or replace trigger completions_derive_id before insert on public.habit_completions
+  for each row execute function public.completion_derive_id();
 
 -- Push the caller's changes (at most 500, like the self-host route). Returns
 -- `{ "skipped": [{ "tbl", "id", "reason": "rejected" }] }`: as the self-host push route does, the
