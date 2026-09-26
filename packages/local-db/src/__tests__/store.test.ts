@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { completionId, isNewer, type SyncChange, type SyncRow } from '@rock_ht/sync'
-import { today } from '@rock_ht/utils'
+import { addDaysToDate, today } from '@rock_ht/utils'
 import { migrate } from '../schema'
 import { createLocalStore, type LocalStore } from '../store'
+import type { SqlDriver } from '../driver'
 import { openTestDriver } from './helpers'
 
 let clock = 0
@@ -27,11 +28,11 @@ describe('LocalStore', () => {
     expect(list[0]!.frequency).toEqual({ type: 'daily' })
   })
 
-  it('writes an outbox entry per mutation', async () => {
+  it('writes an outbox entry per mutated row', async () => {
     const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
-    await s.updateHabit({ id: h.id, title: 'B' })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
     const out = await s.sync.readOutbox(10)
-    expect(out.map((e) => e.change.row.title)).toEqual(['A', 'B'])
+    expect(out.map((e) => e.change.table)).toEqual(['habits', 'habit_completions'])
   })
 
   it('toggles completions with deterministic ids and tombstones', async () => {
@@ -197,4 +198,257 @@ describe('LocalStore', () => {
     const p = await s.ensureProfile(U)
     expect(p.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   })
+
+  it('ackOutbox deletes entries up to and including the given seq', async () => {
+    for (const title of ['A', 'B', 'C']) {
+      await s.createHabit(U, { title, icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    }
+    const out = await s.sync.readOutbox(10)
+    await s.sync.ackOutbox(out[1]!.seq)
+    expect((await s.sync.readOutbox(10)).map((e) => e.change.row.title)).toEqual(['C'])
+  })
+
+  it('updateJournal changes only the given fields, bumps updated_at and queues the row', async () => {
+    const j = await s.createJournal(U, { content: 'hi', mood: 2, entry_date: '2026-01-02' })
+    const updated = await s.updateJournal({ id: j.id, content: 'edited' })
+    expect(updated).toMatchObject({ content: 'edited', mood: 2, entry_date: '2026-01-02' })
+    expect(updated.updated_at > j.updated_at).toBe(true)
+    expect((await s.listJournal(U))[0]!.content).toBe('edited')
+    const last = (await s.sync.readOutbox(10)).at(-1)!
+    expect(last.change.row).toMatchObject({ id: j.id, content: 'edited' })
+    await expect(s.updateJournal({ id: 'missing', content: 'x' })).rejects.toThrow('not found')
+  })
+
+  it('deleteJournal tombstones the entry and queues the tombstone', async () => {
+    const j = await s.createJournal(U, { content: 'hi' })
+    await s.deleteJournal(j.id)
+    expect(await s.listJournal(U)).toEqual([])
+    const row = await s.sync.getRow('journal_entries', j.id)
+    expect(row!.deleted_at).not.toBeNull()
+    expect(row!.updated_at).toBe(row!.deleted_at)
+    expect((await s.sync.readOutbox(10)).at(-1)!.change.row.deleted_at).toBe(row!.deleted_at)
+    await expect(s.updateJournal({ id: j.id, content: 'x' })).rejects.toThrow('not found')
+  })
+
+  it('setCompletionNote sets and clears the note of a live completion only', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.setCompletionNote(h.id, '2026-01-05', 'felt good')
+    expect((await s.listCompletions(U))[0]!.note).toBe('felt good')
+    await s.setCompletionNote(h.id, '2026-01-05', '')
+    expect((await s.listCompletions(U))[0]!.note).toBeNull()
+
+    // No completion (or a tombstoned one): a no-op that queues nothing.
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-07' }, true)
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-07' }, false)
+    const before = await s.sync.readOutbox(100)
+    await s.setCompletionNote(h.id, '2026-01-06', 'ghost')
+    await s.setCompletionNote(h.id, '2026-01-07', 'ghost')
+    expect(await s.sync.getRow('habit_completions', completionId(h.id, '2026-01-06'))).toBeNull()
+    expect((await s.sync.getRow('habit_completions', completionId(h.id, '2026-01-07')))!.note).toBeNull()
+    expect(await s.sync.readOutbox(100)).toEqual(before)
+  })
+
+  it('listCompletions filters by habit and inclusive date range', async () => {
+    const a = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const b = await s.createHabit(U, { title: 'B', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    for (const d of ['2026-01-01', '2026-01-02', '2026-01-03']) {
+      await s.setCompletion(U, { habit_id: a.id, date: d }, true)
+      await s.setCompletion(U, { habit_id: b.id, date: d }, true)
+    }
+    await s.setCompletion('other-user', { habit_id: a.id, date: '2026-01-04' }, true)
+
+    const dates = (rows: { completed_date: string }[]) => rows.map((r) => r.completed_date)
+    expect(await s.listCompletions(U)).toHaveLength(6)
+    expect(await s.listCompletions('other-user')).toHaveLength(1)
+    expect(dates(await s.listCompletions(U, { habitId: a.id }))).toEqual(['2026-01-03', '2026-01-02', '2026-01-01'])
+    expect(dates(await s.listCompletions(U, { habitId: a.id, startDate: '2026-01-02' }))).toEqual(['2026-01-03', '2026-01-02'])
+    expect(dates(await s.listCompletions(U, { habitId: b.id, endDate: '2026-01-02' }))).toEqual(['2026-01-02', '2026-01-01'])
+    expect(dates(await s.listCompletions(U, { startDate: '2026-01-02', endDate: '2026-01-02' })))
+      .toEqual(['2026-01-02', '2026-01-02'])
+  })
 })
+
+describe('LocalStore outbox compaction', () => {
+  let s: LocalStore
+  beforeEach(async () => { s = await newStore() })
+
+  it('keeps one outbox entry with the latest row after N edits of one habit', async () => {
+    const h = await s.createHabit(U, { title: 'v0', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    for (let i = 1; i <= 5; i++) await s.updateHabit({ id: h.id, title: `v${i}` })
+    const out = await s.sync.readOutbox(100)
+    expect(out).toHaveLength(1)
+    expect(out[0]!.change.row.title).toBe('v5')
+    expect(out[0]!.change.row).toEqual(await s.sync.getRow('habits', h.id))
+  })
+
+  it('keeps a compacted parent ahead of the children queued after it', async () => {
+    // The server drops a completion whose habit it doesn't have yet, so a later edit of the habit
+    // must not move the habit's entry behind its completion.
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.updateHabit({ id: h.id, title: 'B' })
+    const out = await s.sync.readOutbox(100)
+    expect(out.map((e) => [e.change.table, e.change.row.title])).toEqual([
+      ['habits', 'B'], ['habit_completions', undefined],
+    ])
+  })
+
+  it('never rewrites an entry that a push has already read, so its ack cannot drop a newer edit', async () => {
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const inFlight = await s.sync.readOutbox(100)
+    await s.updateHabit({ id: h.id, title: 'B' })
+    await s.updateHabit({ id: h.id, title: 'C' })
+    await s.sync.ackOutbox(inFlight.at(-1)!.seq)
+    const out = await s.sync.readOutbox(100)
+    expect(out.map((e) => e.change.row.title)).toEqual(['C'])
+  })
+})
+
+describe('LocalStore sync.applyRemote', () => {
+  let s: LocalStore
+  beforeEach(async () => { s = await newStore() })
+
+  it('compares against the local row inside its own transaction and keeps a newer local row', async () => {
+    const h = await s.createHabit(U, { title: 'local', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const older: SyncRow = { ...(await s.sync.getRow('habits', h.id))!, title: 'remote', updated_at: '2025-01-01T00:00:00.000Z' }
+    await s.sync.applyRemote([{ table: 'habits', row: older }], '9')
+    expect((await s.getHabit(h.id))!.title).toBe('local')
+    expect(await s.sync.getCursor()).toBe('9')
+  })
+
+  it('does not let a pre-read override a local write that lands before the apply', async () => {
+    const h = await s.createHabit(U, { title: 'v1', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    const base = (await s.sync.getRow('habits', h.id))!
+    // Newer than what an engine read before applying, older than the local edit that lands in between.
+    const remote: SyncRow = {
+      ...base, title: 'remote', updated_at: new Date(new Date(base.updated_at).getTime() + 500).toISOString(),
+    }
+    await Promise.all([
+      s.updateHabit({ id: h.id, title: 'local edit' }),
+      s.sync.applyRemote([{ table: 'habits', row: remote }], '1'),
+    ])
+    expect((await s.getHabit(h.id))!.title).toBe('local edit')
+  })
+
+  it('applies more rows than one chunk across several transactions and stores the cursor', async () => {
+    const { store, transactions } = await countingStore()
+    const changes: SyncChange[] = Array.from({ length: 450 }, (_, i) => ({
+      table: 'habits',
+      row: habitRow(`h${i}`, '2026-01-01T00:00:00.000Z'),
+    }))
+    const before = transactions()
+    await store.sync.applyRemote(changes, '450')
+    expect(transactions() - before).toBe(3)
+    expect(await store.listHabits(U)).toHaveLength(450)
+    expect(await store.sync.getCursor()).toBe('450')
+  })
+
+  it('keeps the old cursor when a later chunk fails, so the page is pulled again', async () => {
+    const { store } = await countingStore()
+    await store.sync.applyRemote([], 'old')
+    const changes: SyncChange[] = Array.from({ length: 450 }, (_, i) => ({
+      table: 'habits',
+      row: habitRow(`h${i}`, '2026-01-01T00:00:00.000Z', i === 449 ? null : 'x'),
+    }))
+    await expect(store.sync.applyRemote(changes, 'new')).rejects.toThrow()
+    expect(await store.sync.getCursor()).toBe('old')
+    // Earlier chunks stay committed; re-applying the page later is idempotent.
+    expect(await store.listHabits(U)).toHaveLength(400)
+  })
+})
+
+describe('LocalStore claim', () => {
+  it('keeps every re-queued row\'s original updated_at and bumps only the profile on sign-up', async () => {
+    const s = await newStore()
+    await s.ensureProfile(U)
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    const j = await s.createJournal(U, { content: 'hi' })
+    const stamps = async (user: string) => ({
+      habit: (await s.getHabit(h.id))!.updated_at,
+      completion: (await s.listCompletions(user)).length === 1
+        ? (await s.sync.getRow('habit_completions', completionId(h.id, '2026-01-05')))!.updated_at
+        : 'missing',
+      journal: (await s.listJournal(user)).find((e) => e.id === j.id)!.updated_at,
+    })
+    const before = await stamps(U)
+    const profileBefore = (await s.getProfile(U))!.updated_at
+
+    await s.claim('account-1', { pushLocalProfile: true })
+
+    expect(await stamps('account-1')).toEqual(before)
+    const out = await s.sync.readOutbox(100)
+    const byTable = Object.fromEntries(out.map((e) => [e.change.table, e.change.row.updated_at]))
+    expect(byTable).toMatchObject({
+      habits: before.habit, habit_completions: before.completion, journal_entries: before.journal,
+    })
+    expect((await s.getProfile('account-1'))!.updated_at > profileBefore).toBe(true)
+  })
+
+  it('re-queues more rows than one chunk, parents first', async () => {
+    const { store } = await countingStore()
+    await store.ensureProfile(U)
+    const h = await store.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await store.sync.applyRemote(completionRows(h.id, 450), null)
+    await store.claim('account-1', { pushLocalProfile: true })
+    const out = await store.sync.readOutbox(1000)
+    expect(out).toHaveLength(452)
+    expect(out.slice(0, 2).map((e) => e.change.table)).toEqual(['profiles', 'habits'])
+    expect(new Set(out.map((e) => e.change.row.id)).size).toBe(452)
+    expect(out.filter((e) => e.change.table !== 'profiles').every((e) => e.change.row.user_id === 'account-1')).toBe(true)
+  })
+
+  it('finishes an interrupted chunked claim before the next push reads the outbox', async () => {
+    const { store, failTransaction, transactions } = await countingStore()
+    await store.ensureProfile(U)
+    const h = await store.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await store.sync.applyRemote(completionRows(h.id, 450), null)
+    // Let the first transaction (rewrite + profile/habits) and one completion chunk commit, then crash.
+    failTransaction(transactions() + 3)
+    await expect(store.claim('account-1', { pushLocalProfile: true })).rejects.toThrow('crash')
+    const out = await store.sync.readOutbox(1000)
+    expect(out).toHaveLength(452)
+    expect(new Set(out.map((e) => e.change.row.id)).size).toBe(452)
+  })
+})
+
+function habitRow(id: string, updated_at: string, title: string | null = 'x'): SyncRow {
+  return {
+    id, user_id: U, title, description: null, icon: '✨', color: '#fff', frequency: { type: 'daily' },
+    target_value: 1, target_unit: null, reminder_time: null, reminder_enabled: false, is_archived: false,
+    sort_order: 0, created_at: updated_at, updated_at, deleted_at: null,
+  }
+}
+
+/** n completions on consecutive days from 2020-01-01 (plain calendar strings, the same in every TZ). */
+function completionRows(habitId: string, n: number): SyncChange[] {
+  return Array.from({ length: n }, (_, i) => {
+    const date = addDaysToDate('2020-01-01', i)
+    return {
+      table: 'habit_completions' as const,
+      row: {
+        id: completionId(habitId, date), habit_id: habitId, user_id: U, completed_date: date, value: 1,
+        note: null, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', deleted_at: null,
+      },
+    }
+  })
+}
+
+/** A store whose driver counts top-level transactions and can be told to fail the Nth one. */
+async function countingStore() {
+  const inner = openTestDriver()
+  await migrate(inner)
+  let count = 0
+  let failAt = -1
+  const driver: SqlDriver = {
+    ...inner,
+    transaction(fn) {
+      count++
+      if (count === failAt) return Promise.reject(new Error('crash'))
+      return inner.transaction(fn)
+    },
+  }
+  const store = createLocalStore({ driver, newId: randomUUID, now })
+  return { store, transactions: () => count, failTransaction: (n: number) => { failAt = n } }
+}

@@ -39,6 +39,10 @@ export interface SyncLocal {
   ackOutbox(uptoSeq: number): Promise<void>
   getRow(table: SyncTable, id: string): Promise<SyncRow | null>
   getCursor(): Promise<string | null>
-  /** Write rows without creating outbox entries and store the cursor, atomically. */
+  /**
+   * Write the rows that are newer than the local copy (checked inside the write transaction), without
+   * creating outbox entries, then store the cursor. May commit in chunks, but the cursor is stored
+   * only once every row is applied, so a failure means the same page is pulled and applied again.
+   */
   applyRemote(changes: SyncChange[], cursor: string | null): Promise<void>
 }

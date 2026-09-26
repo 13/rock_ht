@@ -68,6 +68,12 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX journal_date_idx ON journal_entries (entry_date);
   `,
+  // 2: outbox compaction per (tbl, row_id) — see `enqueue` in store.ts.
+  `
+  ALTER TABLE outbox ADD COLUMN row_id TEXT;
+  UPDATE outbox SET row_id = json_extract(row_json, '$.id');
+  CREATE INDEX outbox_row_idx ON outbox (tbl, row_id);
+  `,
 ]
 
 export async function migrate(driver: SqlDriver): Promise<void> {
