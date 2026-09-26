@@ -65,3 +65,28 @@ jobs:
 
       - name: Run sync integration tests
         run: npm run test:int --workspace=apps/web
+
+  supabase-sql-smoke:
+    name: Supabase migrations (SQL smoke)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: pg }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:pg@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # A stand-in for the Supabase-provided roles, auth schema and extensions (CI only).
+      - name: Load Supabase stub
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/ci/stub.sql
+
+      - name: Apply migrations in order
+        run: for f in supabase/migrations/0*.sql; do echo "::group::$f"; psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f" || exit 1; echo "::endgroup::"; done
+
+      - name: Smoke-test triggers and RPCs
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/ci/smoke.sql
