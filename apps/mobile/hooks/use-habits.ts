@@ -6,6 +6,7 @@ import {
   getNotificationPermissionStatus,
 } from "@/lib/notifications";
 import { getRemindersEnabled } from "@/lib/reminder-settings";
+import { syncNow } from "@/lib/sync/service";
 import type { LocalStore } from "@rock_ht/local-db";
 import type {
   CreateHabitInput,
@@ -55,6 +56,7 @@ export function useHabits() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: HABITS_KEY });
     queryClient.invalidateQueries({ queryKey: ["streaks"] });
+    void syncNow(); // no-op while sync is Off
   };
 
   const createMutation = useMutation({

@@ -25,8 +25,27 @@ import { exportToShareSheet, importFromPicker } from "@/lib/backup";
 import { useTheme } from "@/theme/theme-provider";
 import { PALETTES, THEME_LABELS, THEME_NAMES, type ThemeName } from "@/theme/palettes";
 import { AboutSection } from "@/components/settings/about-section";
+import { useRouter } from "expo-router";
+import { useSync, type SyncStatus } from "@/hooks/use-sync";
+import { syncNow } from "@/lib/sync/service";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+function syncLabel(status: SyncStatus, lastSyncedAt: string | null): string {
+  switch (status) {
+    case "off": return "Off";
+    case "syncing": return "Syncing…";
+    case "error": return "Error";
+    case "idle": {
+      if (!lastSyncedAt) return "On";
+      const mins = Math.round((Date.now() - new Date(lastSyncedAt).getTime()) / 60_000);
+      if (mins < 1) return "Just now";
+      if (mins < 60) return `${mins} min ago`;
+      const hours = Math.round(mins / 60);
+      return hours < 24 ? `${hours} h ago` : new Date(lastSyncedAt).toLocaleDateString();
+    }
+  }
+}
 
 interface SettingRowProps {
   icon: IoniconName;
@@ -204,6 +223,8 @@ export default function SettingsScreen() {
   // On only when the saved switch and the OS permission both allow reminders
   const notifEnabled = (remindersSetting.data ?? false) && isGranted;
   const { name: activeTheme, colors, setTheme } = useTheme();
+  const router = useRouter();
+  const sync = useSync();
 
   async function handleThemeChange(next: ThemeName) {
     hapticLight();
@@ -215,9 +236,18 @@ export default function SettingsScreen() {
   }
 
   function handleSignOut() {
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+    Alert.alert("Sign out", "Sync stops and your data stays on this device.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: signOut },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: () => {
+          signOut().catch((e) => {
+            hapticError();
+            Alert.alert("Sign out failed", e instanceof Error ? e.message : String(e));
+          });
+        },
+      },
     ]);
   }
 
@@ -281,6 +311,7 @@ export default function SettingsScreen() {
       if (!result) return;
       await queryClient.invalidateQueries();
       await rebuildRemindersFromStore(store, userId);
+      void syncNow(); // no-op while sync is Off
       Alert.alert("Import complete", `${result.imported} items restored, ${result.skipped} already up to date.`);
     } catch (e) {
       hapticError();
@@ -398,6 +429,17 @@ export default function SettingsScreen() {
           />
         </SectionCard>
 
+        {/* Sync */}
+        <SectionHeader title="Sync" />
+        <SectionCard>
+          <SettingRow
+            icon={sync.status === "error" ? "cloud-offline-outline" : "sync-outline"}
+            label="Sync"
+            value={syncLabel(sync.status, sync.lastSyncedAt)}
+            onPress={() => { hapticLight(); router.push("/sync-settings"); }}
+          />
+        </SectionCard>
+
         {/* Data */}
         <SectionHeader title="Data" />
         <SectionCard>
@@ -416,8 +458,8 @@ export default function SettingsScreen() {
           />
         </SectionCard>
 
-        {/* Danger */}
-        {user.email ? (
+        {/* Danger: signing out = disconnecting sync (the profile keeps its email afterwards) */}
+        {sync.status !== "off" ? (
           <View style={{ marginHorizontal: 20, marginTop: 20 }}>
             <TouchableOpacity
               onPress={handleSignOut}

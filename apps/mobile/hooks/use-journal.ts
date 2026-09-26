@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocal } from "@/providers/local-provider";
+import { syncNow } from "@/lib/sync/service";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
@@ -24,6 +25,7 @@ export function useJournal() {
         old ? [entry, ...old] : [entry]
       );
     },
+    onSettled: () => void syncNow(), // no-op while sync is Off
   });
 
   const updateMutation = useMutation({
@@ -33,6 +35,7 @@ export function useJournal() {
         old?.map((e) => (e.id === updated.id ? updated : e))
       );
     },
+    onSettled: () => void syncNow(), // no-op while sync is Off
   });
 
   const deleteMutation = useMutation({
@@ -42,6 +45,7 @@ export function useJournal() {
         old?.filter((e) => e.id !== entryId)
       );
     },
+    onSettled: () => void syncNow(), // no-op while sync is Off
   });
 
   return {

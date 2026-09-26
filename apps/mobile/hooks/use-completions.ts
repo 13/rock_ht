@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocal } from "@/providers/local-provider";
 import { subtractDays } from "@rock_ht/utils";
 import { useToday } from "@/hooks/use-today";
+import { syncNow } from "@/lib/sync/service";
 import type { CompletionRow, ToggleCompletionInput } from "@rock_ht/types";
 
 /** Keys include the local date: a new day is a new cache entry. */
@@ -35,6 +36,7 @@ export function useCompletions() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["completions"] });
     queryClient.invalidateQueries({ queryKey: ["streaks"] });
+    void syncNow(); // no-op while sync is Off
   };
 
   const toggleMutation = useMutation({

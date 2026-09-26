@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The sync server URL is chosen by the user at runtime (Settings > Sync) and is
+  often a LAN address without TLS, so cleartext must be allowed app-wide.
+  User credentials go to that server only. The in-app updater refuses non-https
+  download URLs itself (lib/app-update.ts), so this does not weaken updates.
+-->
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>

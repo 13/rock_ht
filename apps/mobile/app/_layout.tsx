@@ -8,18 +8,21 @@ Sentry.init({
   tracesSampleRate: __DEV__ ? 0 : 0.1,
   enabled: !__DEV__,
 });
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppProviders } from "@/providers";
 import { useProfile } from "@/hooks/use-profile";
 import { useRebuildRemindersOnLaunch } from "@/hooks/use-reminders";
-import { ThemeProvider } from "@/theme/theme-provider";
+import { useSyncTriggers } from "@/hooks/use-sync";
+import { ThemeProvider, useTheme } from "@/theme/theme-provider";
 
 SplashScreen.preventAutoHideAsync();
 
 function OnboardingGuard() {
   useRebuildRemindersOnLaunch();
+  useSyncTriggers();
+  const { colors } = useTheme();
   const { profile, isLoading } = useProfile();
   const segments = useSegments();
   const router = useRouter();
@@ -31,7 +34,9 @@ function OnboardingGuard() {
     SplashScreen.hideAsync();
   }, [profile, isLoading, segments]);
 
-  return <Slot />;
+  // A stack (not a Slot) so pushed screens (habit detail, Sync settings) return to the tab they
+  // were opened from instead of remounting the tabs on Today.
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />;
 }
 
 function RootLayout() {
