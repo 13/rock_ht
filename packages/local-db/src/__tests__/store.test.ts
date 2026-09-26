@@ -65,6 +65,13 @@ describe('LocalStore', () => {
     expect((await s.listJournal(U))[0]!.content).toBe('hi')
   })
 
+  it('resetCursor clears a stored pull cursor (e.g. on disconnect, before a switch to a different backend)', async () => {
+    await s.sync.applyRemote([], '42')
+    expect(await s.sync.getCursor()).toBe('42')
+    await s.sync.resetCursor()
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
   it('claim on sign-up pushes the local profile and re-queues every row', async () => {
     await s.ensureProfile(U)
     const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })

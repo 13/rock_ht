@@ -5,12 +5,14 @@ import type { SyncChange, SyncLocal, SyncRemote } from "@rock_ht/sync";
 const meta = new Map<string, string | null>();
 let outbox: SyncChange[] = [];
 let skippedPerPush = 0;
+let cursor: string | null = null;
 
 const local: SyncLocal = {
   async readOutbox(limit) { return outbox.slice(0, limit).map((change, i) => ({ seq: i + 1, change })); },
   async ackOutbox(upto) { outbox = outbox.slice(upto); },
   async getRow() { return null; },
-  async getCursor() { return null; },
+  async getCursor() { return cursor; },
+  async resetCursor() { cursor = null; },
   async applyRemote() {},
 };
 const remote: SyncRemote = {
@@ -40,6 +42,7 @@ describe("sync service: changes the server rejected", () => {
     meta.set("account_user_id", "acct");
     outbox = [];
     skippedPerPush = 0;
+    cursor = null;
     await service.resetSyncState();
   });
 
@@ -81,5 +84,12 @@ describe("sync service: changes the server rejected", () => {
     await service.resetSyncState();
     expect(service.getSyncState().rejected).toBe(0);
     expect(service.rejectedWarning(0)).toBeNull();
+  });
+
+  it("resetSyncState (e.g. on disconnect) clears the pull cursor, so a switch to a different backend never resumes from it", async () => {
+    cursor = "173";
+    expect(await local.getCursor()).toBe("173");
+    await service.resetSyncState();
+    expect(await local.getCursor()).toBeNull();
   });
 });

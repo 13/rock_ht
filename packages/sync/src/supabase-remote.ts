@@ -31,8 +31,10 @@ function toError(fn: string, res: RpcResponse): Error {
   return new Error(label)
 }
 
-/** Races `p` against a 20s timeout (supabase-js's fetch has none), like `createHttpRemote`. */
-async function withTimeout<T>(fn: string, p: PromiseLike<T>): Promise<T> {
+/** Races `p` against a 20s timeout (supabase-js's fetch has none), like `createHttpRemote`. Exported
+ *  so the mobile Supabase backend can wrap its own auth calls (`getSession`, `getUser`,
+ *  `refreshSession`) in the same budget instead of duplicating it. */
+export async function withTimeout<T>(fn: string, p: PromiseLike<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${fn} timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)

@@ -1,7 +1,23 @@
 import type { LocalStore } from "@rock_ht/local-db";
 import { loadSyncConfig, saveSyncConfig, type SyncConfig } from "./config";
+import { ConfirmEmailError } from "./errors";
 import { createBackend, type SyncBackend } from "./remote-factory";
 import { pauseSync, resetSyncState, resumeSync, waitForSyncIdle } from "./service";
+
+// A sign-up that got ConfirmEmailError (no session yet) records its email here. Read (and
+// cleared) on the next successful sign-in with the same email, so that sign-in also pushes this
+// device's local profile — the same as a normal sign-up would have, had the server handed out a
+// session right away.
+const PENDING_SIGNUP_EMAIL_KEY = "pending_signup_email";
+// Also read by service.ts's refreshSyncState for the Settings account card; cleared on disconnect.
+const ACCOUNT_EMAIL_KEY = "account_email";
+
+/** True when `email` (the one a sign-in just used) is the address a previous sign-up on this
+ *  device is still waiting to be confirmed for. Case/whitespace-insensitive, since that's how the
+ *  email was normalised when it was recorded. Exported for unit testing. */
+export function shouldPushProfileOnSignIn(pendingSignupEmail: string | null, email: string): boolean {
+  return pendingSignupEmail !== null && pendingSignupEmail === email.trim().toLowerCase();
+}
 
 /** Turns fetch's bare "Network request failed" into something a user can act on. */
 function friendly(e: unknown, config: SyncConfig): Error {
@@ -41,13 +57,24 @@ export async function connectSync(
           ? await backend.signUp(creds.email.trim(), creds.password, creds.name.trim())
           : await backend.signIn(creds.email.trim(), creds.password);
     } catch (e) {
+      if (e instanceof ConfirmEmailError) {
+        // Sign-up went through server-side but there's no session yet. Remember the email so a
+        // later sign-in with it also pushes this device's profile (see `shouldPushProfileOnSignIn`).
+        await store.setMeta(PENDING_SIGNUP_EMAIL_KEY, creds.email.trim().toLowerCase());
+      }
       throw friendly(e, config);
     }
     try {
       await saveSyncConfig(config);
+      const pending = await store.getMeta(PENDING_SIGNUP_EMAIL_KEY);
+      const confirmedSignup = shouldPushProfileOnSignIn(pending, creds.email);
       // Early-returns in the store when this device's rows already belong to accountId.
-      const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" });
+      const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" || confirmedSignup });
       await completed;
+      if (confirmedSignup) await store.setMeta(PENDING_SIGNUP_EMAIL_KEY, null);
+      // Local meta only — never written into the synced profile row — so the Settings account card
+      // has something to show even before this device has pulled the server's own profile.
+      await store.setMeta(ACCOUNT_EMAIL_KEY, creds.email.trim());
       return accountId;
     } catch (e) {
       // The sign-in/up above already stored a session cookie for accountId. If anything after
@@ -86,6 +113,7 @@ export async function disconnectSync(store: LocalStore): Promise<void> {
     // Local id first, so resolveUserId never sees neither id and mints a fresh one.
     if (accountId) await store.setMeta("local_user_id", accountId);
     await store.setMeta("account_user_id", null);
+    await store.setMeta(ACCOUNT_EMAIL_KEY, null);
     await saveSyncConfig({ kind: "off" });
     await resetSyncState();
   } finally {

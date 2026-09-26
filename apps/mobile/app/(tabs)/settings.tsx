@@ -368,7 +368,7 @@ export default function SettingsScreen() {
               <Text
                 style={{ fontSize: 16, fontWeight: "700", color: colors.primary }}
               >
-                {user?.email?.[0]?.toUpperCase() ?? "U"}
+                {(sync.accountEmail || user.email)?.[0]?.toUpperCase() ?? "U"}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
@@ -376,10 +376,13 @@ export default function SettingsScreen() {
                 style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}
                 numberOfLines={1}
               >
-                {user.email ?? "Local profile"}
+                {/* '||' rather than '??': both sides are meta/profile strings that are '' rather than
+                    null when unset, and sync.accountEmail (set right after connecting) is shown ahead
+                    of the local profile's own email, which stays blank until the first pull. */}
+                {sync.accountEmail || user.email || "Local profile"}
               </Text>
               <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
-                {user.email
+                {sync.accountEmail || user.email
                   ? `Member since ${new Date(user.created_at).getFullYear()}`
                   : "Stored on this device"}
               </Text>

@@ -668,6 +668,7 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     },
     getRow: (table, id) => getRow(table, id),
     getCursor: () => getMeta(CURSOR_KEY),
+    resetCursor: () => setMeta(CURSOR_KEY, null),
     /**
      * Last-write-wins against the row as it is *inside* each transaction (a local write may have landed
      * since the engine's `getRow`). Applied `chunkSize` rows per transaction; the cursor is stored with

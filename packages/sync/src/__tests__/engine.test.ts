@@ -11,6 +11,7 @@ function fakeLocal(rows: SyncChange[] = [], outbox: SyncChange[] = []) {
     async ackOutbox(upto) { entries = entries.filter((e) => e.seq > upto) },
     async getRow(table: SyncTable, id) { return data.get(`${table}:${id}`) ?? null },
     async getCursor() { return cursor },
+    async resetCursor() { cursor = null },
     async applyRemote(changes, c) {
       for (const ch of changes) data.set(`${ch.table}:${ch.row.id}`, ch.row)
       cursor = c

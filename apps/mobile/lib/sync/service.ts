@@ -17,11 +17,17 @@ export type SyncState = {
    *  device connected or the user dismissed the warning. Non-zero means "synced, but with losses":
    *  the UI shows a warning instead of a plain "synced". The changes themselves are acked. */
   rejected: number;
+  /** The email `connectSync` used to sign in/up, kept in local meta (never in the synced profile)
+   *  so the Settings account card can show it even before this device has pulled the server's own
+   *  profile row. Null while off or before any successful connect. */
+  accountEmail: string | null;
 };
 
 const LAST_SYNCED_KEY = "last_synced_at";
 const SESSION_CHECKED_KEY = "session_checked_at";
 const REJECTED_KEY = "sync_rejected";
+// Also written (and cleared on disconnect) by account.ts's connectSync/disconnectSync.
+const ACCOUNT_EMAIL_KEY = "account_email";
 const SESSION_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 let inFlight: Promise<SyncReport | null> | null = null;
@@ -37,7 +43,9 @@ let paused = false;
 // between the pre-run check and the push/pull). Forces the next run to re-check the session
 // instead of waiting out the 24h interval.
 let lastRunFailedAuth = false;
-let state: SyncState = { off: true, signedOut: false, syncing: false, error: null, at: null, rejected: 0 };
+let state: SyncState = {
+  off: true, signedOut: false, syncing: false, error: null, at: null, rejected: 0, accountEmail: null,
+};
 let loadedAt = false;
 const listeners = new Set<(s: SyncState) => void>();
 const pulledListeners = new Set<(r: SyncReport) => void>();
@@ -95,19 +103,26 @@ export async function refreshSyncState(): Promise<void> {
       signedOut: off ? false : state.signedOut,
       at: await store.getMeta(LAST_SYNCED_KEY),
       rejected: parseCount(await store.getMeta(REJECTED_KEY)),
+      // '||' rather than '??': an empty string (never written on purpose, but meta is a plain
+      // string store) must fall back to "no email" the same as a missing key.
+      accountEmail: (await store.getMeta(ACCOUNT_EMAIL_KEY)) || null,
     });
   } catch (e) {
     console.warn("[sync] couldn't read sync state", e);
   }
 }
 
-/** Forget the last error, sync time and session-check clock (on disconnect), so a later
- *  reconnect re-checks the session on its first run instead of trusting a stale timestamp. */
+/** Forget the last error, sync time, session-check clock and pull cursor (on disconnect), so a
+ *  later reconnect re-checks the session on its first run instead of trusting a stale timestamp,
+ *  and a connect to a different backend or account never resumes a pull from this one's cursor
+ *  (self-hosted and Supabase cursors are both plain digits, so either's would look valid to the
+ *  other). */
 export async function resetSyncState(): Promise<void> {
   const store = await openLocalStore();
   await store.setMeta(LAST_SYNCED_KEY, null);
   await store.setMeta(SESSION_CHECKED_KEY, null);
   await store.setMeta(REJECTED_KEY, null);
+  await store.sync.resetCursor();
   lastRunFailedAuth = false;
   emit({ error: null, at: null, signedOut: false, rejected: 0 });
   await refreshSyncState();

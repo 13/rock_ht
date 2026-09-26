@@ -16,6 +16,8 @@ export function useSync(): {
   error: string | null;
   /** e.g. "2 changes were rejected by the server"; null when nothing was. */
   warning: string | null;
+  /** The email last used to connect (local meta only, never the synced profile); null while off. */
+  accountEmail: string | null;
   syncNow: () => void;
 } {
   const [state, setState] = useState<SyncState>(getSyncState);
@@ -35,6 +37,7 @@ export function useSync(): {
     lastSyncedAt: state.at,
     error: state.error,
     warning: rejectedWarning(state.rejected),
+    accountEmail: state.accountEmail,
     syncNow: () => void syncNow(),
   };
 }

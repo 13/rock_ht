@@ -62,6 +62,11 @@ export interface SyncLocal {
   ackOutbox(uptoSeq: number): Promise<void>
   getRow(table: SyncTable, id: string): Promise<SyncRow | null>
   getCursor(): Promise<string | null>
+  /** Clears the stored pull cursor (e.g. on disconnect), so a later connect to a different backend
+   *  or account never resumes a pull from a cursor another server minted (both the self-hosted and
+   *  Supabase routes use the same plain-digits cursor format, so a stale one from either would
+   *  otherwise look valid to the other). */
+  resetCursor(): Promise<void>
   /**
    * Write the rows that are newer than the local copy (checked inside the write transaction), without
    * creating outbox entries, then store the cursor. May commit in chunks, but the cursor is stored

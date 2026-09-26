@@ -14,12 +14,23 @@ type Session = { user: { id: string } } | null;
 const auth = {
   session: null as Session,
   sessionError: null as { name: string; message: string } | null,
+  userError: null as { name: string; message: string } | null,
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
+  refreshSession: vi.fn(
+    async (): Promise<{ data: { session: Session }; error: { message: string } | null }> => ({ data: { session: null }, error: null }),
+  ),
   async getSession() { return { data: { session: auth.session }, error: auth.sessionError }; },
+  async getUser() {
+    if (auth.userError) return { data: { user: null }, error: auth.userError };
+    return { data: { user: auth.session?.user ?? null }, error: null };
+  },
 };
-const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({ data: { skipped: [] }, error: null, status: 200 }));
+type RpcResult = { data: unknown; error: { message: string; code?: string } | null; status: number };
+const rpc = vi.fn(
+  async (_fn: string, _args: Record<string, unknown>): Promise<RpcResult> => ({ data: { skipped: [] }, error: null, status: 200 }),
+);
 const createClient = vi.fn((_url: string, _key: string, _opts: { auth: { storageKey: string; storage: unknown } }) => ({ auth, rpc }));
 class AuthRetryableFetchError extends Error { name = "AuthRetryableFetchError"; }
 vi.mock("@supabase/supabase-js", () => ({
@@ -35,10 +46,14 @@ beforeEach(() => {
   secure.clear();
   auth.session = null;
   auth.sessionError = null;
+  auth.userError = null;
   auth.signUp.mockReset();
   auth.signInWithPassword.mockReset();
   auth.signOut.mockReset();
+  auth.refreshSession.mockReset();
+  auth.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
   rpc.mockClear();
+  rpc.mockImplementation(async (_fn, _args): Promise<RpcResult> => ({ data: { skipped: [] }, error: null, status: 200 }));
   createClient.mockClear();
 });
 
@@ -113,5 +128,61 @@ describe("supabaseBackend", () => {
     const b = await supabaseBackend("http://x.test", "anon");
     expect(await b.remote.push([])).toEqual({ skipped: [] });
     expect(rpc).toHaveBeenCalledWith("sync_push", { p_changes: [] });
+  });
+
+  it("refreshes an expired JWT once and retries the rpc, on PGRST301", async () => {
+    auth.session = { user: { id: "u1" } };
+    rpc
+      .mockResolvedValueOnce({ data: null, error: { message: "JWT expired", code: "PGRST301" }, status: 401 })
+      .mockResolvedValueOnce({ data: { skipped: [] }, error: null, status: 200 });
+    auth.refreshSession.mockResolvedValue({ data: { session: { user: { id: "u1" } } }, error: null });
+    const b = await supabaseBackend("http://x.test", "anon");
+    expect(await b.remote.push([])).toEqual({ skipped: [] });
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes on a plain 'jwt expired' message too (no code)", async () => {
+    auth.session = { user: { id: "u1" } };
+    rpc
+      .mockResolvedValueOnce({ data: null, error: { message: "jwt expired" }, status: 401 })
+      .mockResolvedValueOnce({ data: { skipped: [] }, error: null, status: 200 });
+    auth.refreshSession.mockResolvedValue({ data: { session: { user: { id: "u1" } } }, error: null });
+    const b = await supabaseBackend("http://x.test", "anon");
+    expect(await b.remote.push([])).toEqual({ skipped: [] });
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps to SyncAuthError, without retrying the rpc, when the refresh itself fails", async () => {
+    auth.session = { user: { id: "u1" } };
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "JWT expired", code: "PGRST301" }, status: 401 });
+    auth.refreshSession.mockResolvedValue({ data: { session: null }, error: { message: "Invalid Refresh Token" } });
+    const b = await supabaseBackend("http://x.test", "anon");
+    await expect(b.remote.push([])).rejects.toBeInstanceOf(SyncAuthError);
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not touch refreshSession for a non-JWT-expiry rpc error", async () => {
+    auth.session = { user: { id: "u1" } };
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "permission denied", code: "42501" }, status: 403 });
+    const b = await supabaseBackend("http://x.test", "anon");
+    await expect(b.remote.push([])).rejects.toThrow(/permission denied/);
+    expect(auth.refreshSession).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("currentUserId re-validates against the server and returns null for a revoked/invalid token", async () => {
+    auth.session = { user: { id: "u1" } };
+    auth.userError = { name: "AuthApiError", message: "User from sub claim in JWT does not exist" };
+    const b = await supabaseBackend("http://x.test", "anon");
+    expect(await b.currentUserId()).toBeNull();
+  });
+
+  it("currentUserId still throws (not signed out) when getUser can't reach the server", async () => {
+    auth.session = { user: { id: "u1" } };
+    auth.userError = new AuthRetryableFetchError("Failed to fetch");
+    const b = await supabaseBackend("http://x.test", "anon");
+    await expect(b.currentUserId()).rejects.toThrow("Failed to fetch");
   });
 });
