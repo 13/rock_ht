@@ -4,10 +4,10 @@ A prioritised list of improvements, based on this session's CI runs, the code re
 
 ## Status (2026-09-26)
 
-- **Done:** P0 #1–#4; #5–#7 APK pipeline (`2026-09-25-apk-release-pipeline.md`); #8 web test safety net (vitest route tests + Playwright smoke); #9/#10 clean build; #16/#17 timezone fixes (migration 007); #11 offline-first milestones M1, M2 (sync engine, sync settings) and M3 (self-hosted server, `docker-compose.selfhost.yml`).
+- **Done:** P0 #1–#4; #5–#7 APK pipeline (`2026-09-25-apk-release-pipeline.md`); #8 web test safety net (vitest route tests + Playwright smoke); #9/#10 clean build; #16/#17 timezone fixes (migration 007); #11 offline-first milestones M1, M2 (sync engine, sync settings), M3 (self-hosted server, `docker-compose.selfhost.yml`) and M4 (Supabase migration 008 + Supabase sync backend; hosted rollout per `docs/supabase-008-rollout.md`).
 - **Also done:** mobile gaps (bottom sheet scroll, reminder time picker, five themes, persisted reminders switch), About section + in-app updates from GitHub releases (`2026-09-26-about-and-updates.md`).
-- **Owner actions pending:** push `main`; upload signing secrets to the `release` environment; tag `v0.3.0` then bump `app.json` to 0.4.0; make `ghcr.io/13/rock_ht-web` public; deploy migration 007 to the hosted Supabase.
-- **Next:** M4 (Supabase as optional sync backend, Tasks 14–15, carry-over lists in the plan); #12 rate limiter across replicas; #13 Docker HEALTHCHECK; #14 split large web pages; #15 Dependabot / pinned actions; iOS verification of the time picker and updater.
+- **Owner actions pending:** push `main`; upload signing secrets to the `release` environment; tag `v0.3.0` then bump `app.json` to 0.4.0; make `ghcr.io/13/rock_ht-web` public; deploy migrations 007 + 008 to the hosted Supabase (rollout guide).
+- **Next:** apply 008 to the hosted Supabase (owner, per the rollout guide); #12 rate limiter across replicas; #13 Docker HEALTHCHECK; #14 split large web pages; #15 Dependabot / pinned actions; iOS verification of the time picker and updater.
 
 ## P0: broken now (small, do first)
 
