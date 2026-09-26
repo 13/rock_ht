@@ -3741,6 +3741,12 @@ git commit -m "feat(selfhost): build web without Supabase env and add docker com
 
 ### Task 14: Supabase migration 008 + web client soft deletes
 
+**Carry-over from the M3 Task 12 review (2026-09-26):**
+- (a) Drop the 003 `set_updated_at` triggers on `profiles`, `habits` and `journal_entries` in 008: they overwrite the device's `updated_at` with `now()` on every write and break last-write-wins. `bump_sync_seq` (shared block) already advances `updated_at` for writers that don't set it.
+- (b) `handle_new_user` must create the profile with `updated_at = '1970-01-01T00:00:00.001Z'` (as the self-hosted `user.create.after` hook does), so the signing-up device's first profile push wins even with a clock behind the server's.
+- (c) `sync_push_for`/`sync_pull_for` take `p_user` and are exposed by PostgREST. Keep them `SECURITY INVOKER` so RLS confines them to `auth.uid()`'s rows; or, if they are wrapped as `SECURITY DEFINER`, `revoke execute on function public.sync_push_for(uuid, jsonb), public.sync_pull_for(uuid, bigint, int) from public, anon, authenticated` outside the shared block and expose only `auth.uid()`-bound wrappers (`sync_push(p_changes)`, `sync_pull(p_cursor, p_limit)`).
+- (d) `grant usage on sequence public.sync_seq to authenticated`: the `bump_sync_seq` trigger calls `nextval` as the PostgREST writer.
+
 **Carry-over from M1 review:**
 - Normalize completion ids to `completionId(habit_id, completed_date)` on import, once web/Supabase exports exist and can hand back ids that don't already follow that scheme (`packages/local-db/src/backup.ts`, `packages/local-db/src/store.ts` `importBackup`).
 
