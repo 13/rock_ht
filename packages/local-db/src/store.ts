@@ -34,6 +34,12 @@ const CLAIM_KEY = 'claim_progress'
 /** Tables `claim` re-queues in chunks after its first transaction (they have no dependents). */
 const CLAIM_CHUNKED = ['habit_completions', 'journal_entries'] as const
 type ClaimProgress = { table: (typeof CLAIM_CHUNKED)[number]; after: number }
+/**
+ * JSON array of every account id this device's rows have been claimed under (see `claim`). A row
+ * owned by one of these ids may already exist on a server under that account, so a claim to a
+ * *different* account must give it a new id (the server never lets one account write another's ids).
+ */
+const ACCOUNTS_KEY = 'claimed_accounts'
 
 /**
  * Floor for a claimed-but-not-pushed profile's `updated_at` (see `claim`, `pushLocalProfile: false`).
@@ -421,10 +427,20 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * this device was disconnected from), nothing is rewritten — no profile drop, no outbox reset, no
    * cursor reset, no re-queue — and only `account_user_id` is written. Rewriting a user's rows to
    * themselves would delete their profile (the collision guard below) and discard pending edits.
+   *
+   * Another account's rows: every claim records `toUserId` in meta `claimed_accounts` (first
+   * transaction). When the rows belong to a *different* recorded account (synced to A, disconnected,
+   * now connecting to B), their ids may already be on the server as A's, and the server skips ids
+   * another account owns. So the first transaction also re-keys every row (`rekey`): the device's data
+   * is copied into B under new ids and A's server data is left alone. Rows owned by the purely local
+   * identity (never an account) keep their ids: they were never on a server.
    */
   async function claim(toUserId: string, opts: { pushLocalProfile: boolean }): Promise<{ completed: Promise<void> }> {
     await driver.transaction(async (tx) => {
+      const accounts = await claimedAccounts(tx)
+      if (!accounts.includes(toUserId)) await setMeta(ACCOUNTS_KEY, JSON.stringify([...accounts, toUserId]), tx)
       if (await ownedBy(tx, toUserId)) { await setMeta(ACCOUNT_KEY, toUserId, tx); return }
+      if (await ownerMaybeOnServer(tx, accounts, toUserId)) await rekey(tx)
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?`, [toUserId])
       }
@@ -450,6 +466,71 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       console.warn('claim: re-queue interrupted; sync.readOutbox will resume it', e)
     })
     return { completed }
+  }
+
+  /**
+   * The accounts in `ACCOUNTS_KEY`. A device synced by a build that predates that key has none
+   * recorded; if it holds a pull cursor its rows' owner has synced (only an account's sync run stores
+   * one, and `claim` clears it), so that owner is taken as an account.
+   */
+  async function claimedAccounts(tx: SqlDriver): Promise<string[]> {
+    const raw = await getMeta(ACCOUNTS_KEY, tx)
+    if (raw) return JSON.parse(raw) as string[]
+    if (!(await getMeta(CURSOR_KEY, tx))) return []
+    return (await rowOwners(tx))
+  }
+
+  /** Every id that owns a row on this device (normally just one, see `claim`'s invariant). */
+  async function rowOwners(tx: SqlDriver): Promise<string[]> {
+    const rows = await tx.all<{ owner: string }>(
+      `SELECT id AS owner FROM profiles UNION SELECT user_id FROM habits
+       UNION SELECT user_id FROM habit_completions UNION SELECT user_id FROM journal_entries`,
+    )
+    return rows.map((r) => r.owner)
+  }
+
+  /** True when some row belongs to an account other than `toUserId` (so its id may be on a server). */
+  async function ownerMaybeOnServer(tx: SqlDriver, accounts: string[], toUserId: string): Promise<boolean> {
+    return (await rowOwners(tx)).some((o) => o !== toUserId && accounts.includes(o))
+  }
+
+  /**
+   * Give every row a new id, for a claim that copies rows already synced under one account into
+   * another. The server keeps ids per account (`sync_push_for` skips an id another account owns), so
+   * the old ids would never reach the new account.
+   *
+   * Habits and journal entries get fresh uuids; completions are re-derived as
+   * `completionId(newHabitId, completed_date)` (the id every device must agree on). References
+   * follow: `habit_completions.habit_id` and `journal_entries.habit_id`. Tombstones are dropped rather
+   * than re-keyed: under a new id they delete nothing on the server. With them go the completions of a
+   * deleted habit (hidden locally already, see `LIVE_HABIT_FILTER`), and a journal entry about a
+   * deleted habit loses the link (the server would write it as null anyway).
+   *
+   * Runs inside `claim`'s first transaction, all rows at once: re-keying completions in later chunks
+   * would leave a window where a completion's id no longer matches its habit (a toggle then trips the
+   * unique (habit_id, completed_date) constraint). A device's data is small (thousands of rows at
+   * most), so the one longer transaction on an account switch is the price of never being half done.
+   */
+  async function rekey(tx: SqlDriver): Promise<void> {
+    await tx.run('DELETE FROM habit_completions WHERE deleted_at IS NOT NULL OR habit_id NOT IN (SELECT id FROM habits WHERE deleted_at IS NULL)')
+    await tx.run('DELETE FROM journal_entries WHERE deleted_at IS NOT NULL')
+    await tx.run('UPDATE journal_entries SET habit_id = NULL WHERE habit_id NOT IN (SELECT id FROM habits WHERE deleted_at IS NULL)')
+    await tx.run('DELETE FROM habits WHERE deleted_at IS NOT NULL')
+    const habits = await tx.all<{ id: string }>('SELECT id FROM habits')
+    for (const { id } of habits) {
+      const fresh = newId()
+      await tx.run('UPDATE habits SET id = ? WHERE id = ?', [fresh, id])
+      await tx.run('UPDATE journal_entries SET habit_id = ? WHERE habit_id = ?', [fresh, id])
+      const completions = await tx.all<{ id: string; completed_date: string }>(
+        'SELECT id, completed_date FROM habit_completions WHERE habit_id = ?', [id],
+      )
+      for (const c of completions) {
+        await tx.run('UPDATE habit_completions SET id = ?, habit_id = ? WHERE id = ?',
+          [completionId(fresh, c.completed_date), fresh, c.id])
+      }
+    }
+    const entries = await tx.all<{ id: string }>('SELECT id FROM journal_entries')
+    for (const { id } of entries) await tx.run('UPDATE journal_entries SET id = ? WHERE id = ?', [newId(), id])
   }
 
   /** True when a profile row exists at `userId` and no row (tombstones included) belongs to anyone else. */

@@ -491,6 +491,183 @@ describe('LocalStore claim', () => {
   })
 })
 
+/** Everything in a table, tombstones included, straight from the store's own reader. */
+async function allRows(s: LocalStore, table: 'habits' | 'habit_completions' | 'journal_entries', ids: string[]) {
+  return (await Promise.all(ids.map((id) => s.sync.getRow(table, id)))).filter((r) => r !== null)
+}
+
+/**
+ * A device that signed up as account A, pushed everything, and was disconnected (rows stay under A,
+ * `local_user_id` = A, `account_user_id` = null), the state Task 13's end-to-end run found.
+ */
+async function syncedThenDisconnected(s: LocalStore, account = 'account-A') {
+  await s.ensureProfile(U)
+  const h1 = await s.createHabit(U, { title: 'Run', icon: '🏃', color: '#f00', frequency: { type: 'daily' } })
+  const h2 = await s.createHabit(U, { title: 'Gone', icon: '✨', color: '#0f0', frequency: { type: 'daily' } })
+  await s.setCompletion(U, { habit_id: h1.id, date: '2026-01-05' }, true)
+  await s.setCompletion(U, { habit_id: h1.id, date: '2026-01-06' }, true)
+  await s.setCompletion(U, { habit_id: h1.id, date: '2026-01-07' }, true)
+  await s.setCompletion(U, { habit_id: h1.id, date: '2026-01-07' }, false) // tombstone
+  await s.setCompletion(U, { habit_id: h2.id, date: '2026-01-05' }, true)
+  const j1 = await s.createJournal(U, { content: 'linked', habit_id: h1.id })
+  const j2 = await s.createJournal(U, { content: 'deleted' })
+  await s.deleteJournal(j2.id)
+  const j3 = await s.createJournal(U, { content: 'about a deleted habit', habit_id: h2.id })
+  await s.deleteHabit(h2.id)
+  await (await s.claim(account, { pushLocalProfile: true })).completed
+  // A sync run: everything pushed and acked, then a pull stored a cursor.
+  const out = await s.sync.readOutbox(1000)
+  await s.sync.ackOutbox(out.at(-1)!.seq)
+  await s.sync.applyRemote([], '5')
+  // disconnectSync (apps/mobile/lib/sync/account.ts).
+  await s.setMeta('local_user_id', account)
+  await s.setMeta('account_user_id', null)
+  return { h1, h2, j1, j2, j3 }
+}
+
+describe('LocalStore claim to a different account (copy into the new account)', () => {
+  it('re-keys every row when the rows were already synced under another account', async () => {
+    const s = await newStore()
+    const { h1, h2, j1, j2, j3 } = await syncedThenDisconnected(s)
+    const oldCompletionIds = ['2026-01-05', '2026-01-06', '2026-01-07'].map((d) => completionId(h1.id, d))
+      .concat(completionId(h2.id, '2026-01-05'))
+
+    await (await s.claim('account-B', { pushLocalProfile: true })).completed
+
+    // No row keeps an id the server already has under account A.
+    expect(await allRows(s, 'habits', [h1.id, h2.id])).toEqual([])
+    expect(await allRows(s, 'habit_completions', oldCompletionIds)).toEqual([])
+    expect(await allRows(s, 'journal_entries', [j1.id, j2.id, j3.id])).toEqual([])
+
+    const habits = await s.listHabits('account-B', { includeArchived: true })
+    expect(habits.map((h) => h.title)).toEqual(['Run'])
+    const run = habits[0]!
+    expect(run.id).not.toBe(h1.id)
+    expect(run).toMatchObject({ icon: '🏃', color: '#f00', created_at: h1.created_at, updated_at: h1.updated_at })
+
+    const completions = await s.listCompletions('account-B')
+    expect(completions.map((c) => c.completed_date).sort()).toEqual(['2026-01-05', '2026-01-06'])
+    for (const c of completions) {
+      expect(c.habit_id).toBe(run.id)
+      expect(c.id).toBe(completionId(run.id, c.completed_date))
+    }
+
+    const journal = await s.listJournal('account-B')
+    expect(journal.map((e) => e.content).sort()).toEqual(['about a deleted habit', 'linked'])
+    expect(journal.find((e) => e.content === 'linked')!.habit_id).toBe(run.id)
+    // Its habit was a tombstone and is dropped, so the link goes (the server would null it too).
+    expect(journal.find((e) => e.content === 'about a deleted habit')!.habit_id).toBeNull()
+    for (const e of journal) expect([j1.id, j3.id]).not.toContain(e.id)
+
+    // The outbox holds exactly the live rows, all as B's, parents first.
+    const out = await s.sync.readOutbox(1000)
+    expect(out.map((e) => e.change.table)).toEqual(
+      ['profiles', 'habits', 'habit_completions', 'habit_completions', 'journal_entries', 'journal_entries'])
+    expect(out[0]!.change.row.id).toBe('account-B')
+    expect(out.slice(1).every((e) => e.change.row.user_id === 'account-B')).toBe(true)
+    expect(out.every((e) => e.change.row.deleted_at === null)).toBe(true)
+    expect(await s.getMeta('account_user_id')).toBe('account-B')
+    expect(await s.sync.getCursor()).toBeNull()
+  })
+
+  it('re-keys on sign-in to an existing account too (the local profile is still not queued)', async () => {
+    const s = await newStore()
+    const { h1 } = await syncedThenDisconnected(s)
+    await (await s.claim('account-B', { pushLocalProfile: false })).completed
+    const habits = await s.listHabits('account-B')
+    expect(habits).toHaveLength(1)
+    expect(habits[0]!.id).not.toBe(h1.id)
+    const out = await s.sync.readOutbox(1000)
+    expect(out.some((e) => e.change.table === 'profiles')).toBe(false)
+    expect(out.map((e) => e.change.row.id)).toContain(habits[0]!.id)
+  })
+
+  it('does not re-key the first claim of purely local (never synced) data', async () => {
+    const s = await newStore()
+    await s.ensureProfile(U)
+    const h = await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion(U, { habit_id: h.id, date: '2026-01-05' }, true)
+    const j = await s.createJournal(U, { content: 'hi', habit_id: h.id })
+
+    await (await s.claim('account-A', { pushLocalProfile: true })).completed
+
+    expect((await s.listHabits('account-A')).map((x) => x.id)).toEqual([h.id])
+    expect((await s.listCompletions('account-A')).map((c) => c.id)).toEqual([completionId(h.id, '2026-01-05')])
+    expect((await s.listJournal('account-A')).map((e) => e.id)).toEqual([j.id])
+  })
+
+  it('does not re-key when reconnecting to the same account', async () => {
+    const s = await newStore()
+    const { h1 } = await syncedThenDisconnected(s)
+    await (await s.claim('account-A', { pushLocalProfile: false })).completed
+    expect((await s.listHabits('account-A')).map((h) => h.id)).toEqual([h1.id])
+    expect(await s.sync.readOutbox(1000)).toEqual([])
+    expect(await s.sync.getCursor()).toBe('5')
+  })
+
+  it('re-keys again on a later switch back (B -> A copies B\'s rows into A as new rows)', async () => {
+    const s = await newStore()
+    const { h1 } = await syncedThenDisconnected(s)
+    await (await s.claim('account-B', { pushLocalProfile: true })).completed
+    const inB = (await s.listHabits('account-B'))[0]!.id
+    await s.setMeta('local_user_id', 'account-B')
+    await s.setMeta('account_user_id', null)
+    await (await s.claim('account-A', { pushLocalProfile: false })).completed
+    const inA = (await s.listHabits('account-A'))[0]!.id
+    expect(new Set([h1.id, inB, inA]).size).toBe(3)
+  })
+
+  it('treats a device synced by a build older than this check (cursor set, no account list) as synced', async () => {
+    const s = await newStore()
+    // Rows under account-old, pulled once (cursor stored), and no record of claimed accounts.
+    await s.ensureProfile('account-old')
+    const h = await s.createHabit('account-old', { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.sync.applyRemote([], '3')
+    await (await s.claim('account-B', { pushLocalProfile: true })).completed
+    const habits = await s.listHabits('account-B')
+    expect(habits).toHaveLength(1)
+    expect(habits[0]!.id).not.toBe(h.id)
+  })
+
+  it('re-keys every completion before the claim resolves, so an interrupted re-queue resumes with new ids', async () => {
+    const { store, failTransaction, transactions } = await countingStore()
+    const { h1 } = await syncedThenDisconnected(store)
+    await store.sync.applyRemote(completionRows(h1.id, 450).map((c) => ({
+      ...c, row: { ...c.row, user_id: 'account-A', updated_at: '2026-06-01T00:00:00.000Z' },
+    })), '6')
+    // First transaction (identity, ownership, re-key, heads) commits; the first re-queue chunk fails.
+    failTransaction(transactions() + 2)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await (await store.claim('account-B', { pushLocalProfile: true })).completed
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+    const run = (await store.listHabits('account-B'))[0]!
+    const completions = await store.listCompletions('account-B')
+    expect(completions).toHaveLength(452)
+    expect(completions.every((c) => c.habit_id === run.id && c.id === completionId(run.id, c.completed_date))).toBe(true)
+    const out = await store.sync.readOutbox(1000)
+    // profile + habit + 452 completions + 2 journal entries
+    expect(out).toHaveLength(456)
+    expect(new Set(out.map((e) => e.change.row.id)).size).toBe(456)
+    expect(out.filter((e) => e.change.table === 'habit_completions').every((e) => e.change.row.habit_id === run.id)).toBe(true)
+  })
+
+  it('leaves ids, identity and rows untouched when the re-keying first transaction fails', async () => {
+    const { store, failTransaction, transactions } = await countingStore()
+    const { h1 } = await syncedThenDisconnected(store)
+    failTransaction(transactions() + 1)
+    await expect(store.claim('account-B', { pushLocalProfile: true })).rejects.toThrow('crash')
+    expect(await store.getMeta('account_user_id')).toBeNull()
+    expect((await store.listHabits('account-A')).map((h) => h.id)).toEqual([h1.id])
+    // A retry still re-keys (the account list wasn't lost with the failed transaction).
+    await (await store.claim('account-B', { pushLocalProfile: true })).completed
+    expect((await store.listHabits('account-B'))[0]!.id).not.toBe(h1.id)
+  })
+})
+
 function habitRow(id: string, updated_at: string, title: string | null = 'x'): SyncRow {
   return {
     id, user_id: U, title, description: null, icon: '✨', color: '#fff', frequency: { type: 'daily' },
