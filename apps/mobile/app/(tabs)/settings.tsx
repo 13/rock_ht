@@ -19,6 +19,7 @@ import { hapticLight, hapticError } from "@/lib/haptics";
 import { exportToShareSheet, importFromPicker } from "@/lib/backup";
 import { useTheme } from "@/theme/theme-provider";
 import { PALETTES, THEME_LABELS, THEME_NAMES, type ThemeName } from "@/theme/palettes";
+import { AboutSection } from "@/components/settings/about-section";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -400,12 +401,6 @@ export default function SettingsScreen() {
             label="Timezone"
             value="Auto"
           />
-          <Divider />
-          <SettingRow
-            icon="information-circle-outline"
-            label="Version"
-            value="1.0.0"
-          />
         </SectionCard>
 
         {/* Danger */}
@@ -435,16 +430,7 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
-        <Text
-          style={{
-            textAlign: "center",
-            color: colors.textMuted,
-            fontSize: 12,
-            marginTop: 24,
-          }}
-        >
-          rock v1.0.0
-        </Text>
+        <AboutSection />
       </ScrollView>
     </SafeAreaView>
   );

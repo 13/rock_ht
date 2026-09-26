@@ -83,6 +83,11 @@ if [ -f "$MOBILE/.env.local" ]; then
     set +a
 fi
 
+# Inlined into the JS bundle by Metro; shown under Settings → About
+export EXPO_PUBLIC_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+export EXPO_PUBLIC_GIT_SHA="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD -- || echo '+dirty')"
+export EXPO_PUBLIC_UPDATE_REPO="${EXPO_PUBLIC_UPDATE_REPO:-13/rock_ht}"
+
 # ---- toolchain -------------------------------------------------------------
 # a stale ANDROID_HOME (e.g. root-owned /opt/android-sdk without accepted
 # licenses) fails the NDK auto-install; fall back to the user SDK
