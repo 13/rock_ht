@@ -344,8 +344,11 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
         for (const src of backup.tables[table]) {
           if (table === 'profiles') {
             const local = await getRow('profiles', userId, tx)
+            // The email identifies this device's account (or '' offline), never the backup's source:
+            // a backup exported from another account must not relabel this one.
             const row: SyncRow = {
-              ...src, id: userId, created_at: local?.created_at ?? src.created_at, updated_at: now(), deleted_at: null,
+              ...src, id: userId, email: local?.email ?? '', created_at: local?.created_at ?? src.created_at,
+              updated_at: now(), deleted_at: null,
             }
             await upsert(tx, table, row)
             await enqueue(tx, table, row)
@@ -413,9 +416,15 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * may still be in progress and is resumed automatically (by `sync.readOutbox`). The returned
    * `completed` settles when this call's re-queue attempt ends; it never rejects — a failed chunk is
    * logged with `console.warn` and left for `readOutbox` to resume.
+   *
+   * Already-owned: when every row already belongs to `toUserId` (e.g. re-signing in to the account
+   * this device was disconnected from), nothing is rewritten — no profile drop, no outbox reset, no
+   * cursor reset, no re-queue — and only `account_user_id` is written. Rewriting a user's rows to
+   * themselves would delete their profile (the collision guard below) and discard pending edits.
    */
   async function claim(toUserId: string, opts: { pushLocalProfile: boolean }): Promise<{ completed: Promise<void> }> {
     await driver.transaction(async (tx) => {
+      if (await ownedBy(tx, toUserId)) { await setMeta(ACCOUNT_KEY, toUserId, tx); return }
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?`, [toUserId])
       }
@@ -436,10 +445,21 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       await setMeta(CLAIM_KEY, JSON.stringify(start), tx)
       await setMeta(ACCOUNT_KEY, toUserId, tx)
     })
+    // Already-owned still resumes a re-queue an earlier claim to this account left unfinished.
     const completed = finishClaim().catch((e: unknown) => {
       console.warn('claim: re-queue interrupted; sync.readOutbox will resume it', e)
     })
     return { completed }
+  }
+
+  /** True when a profile row exists at `userId` and no row (tombstones included) belongs to anyone else. */
+  async function ownedBy(tx: SqlDriver, userId: string): Promise<boolean> {
+    if (!(await tx.first('SELECT 1 AS x FROM profiles WHERE id = ?', [userId]))) return false
+    if (await tx.first('SELECT 1 AS x FROM profiles WHERE id <> ? LIMIT 1', [userId])) return false
+    for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
+      if (await tx.first(`SELECT 1 AS x FROM ${t} WHERE user_id <> ? LIMIT 1`, [userId])) return false
+    }
+    return true
   }
 
   /** Re-queue the rest of a pending `claim`, one chunk per transaction. No-op when none is pending. */

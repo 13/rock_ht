@@ -448,6 +448,38 @@ describe('LocalStore claim', () => {
     expect(new Set(out.map((e) => e.change.row.id)).size).toBe(453)
   })
 
+  it('claim to the account that already owns every row only sets account_user_id', async () => {
+    const s = await newStore()
+    // e.g. signed in to account-1 earlier, disconnected (rows stay under account-1), signing in again.
+    await s.ensureProfile('account-1')
+    await s.updateProfile('account-1', { display_name: 'Ada' })
+    const h = await s.createHabit('account-1', { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await s.setCompletion('account-1', { habit_id: h.id, date: '2026-01-05' }, true)
+    await s.sync.applyRemote([], '9')
+    const outBefore = (await s.sync.readOutbox(100)).map((e) => e.seq)
+    const profileBefore = await s.getProfile('account-1')
+
+    await (await s.claim('account-1', { pushLocalProfile: false })).completed
+
+    expect(await s.getMeta('account_user_id')).toBe('account-1')
+    expect(await s.getProfile('account-1')).toEqual(profileBefore)
+    expect(await s.sync.getCursor()).toBe('9')
+    expect((await s.sync.readOutbox(100)).map((e) => e.seq)).toEqual(outBefore)
+    expect(await s.listHabits('account-1')).toHaveLength(1)
+    expect(await s.listCompletions('account-1')).toHaveLength(1)
+  })
+
+  it('claim still rewrites when a single row (even a tombstone) belongs to someone else', async () => {
+    const s = await newStore()
+    await s.ensureProfile('account-1')
+    const j = await s.createJournal(U, { content: 'offline' })
+    await s.deleteJournal(j.id)
+
+    await (await s.claim('account-1', { pushLocalProfile: false })).completed
+
+    expect((await s.sync.getRow('journal_entries', j.id))!.user_id).toBe('account-1')
+  })
+
   it('leaves identity and rows untouched when the first transaction fails', async () => {
     const { store, failTransaction, transactions } = await countingStore()
     await store.ensureProfile(U)

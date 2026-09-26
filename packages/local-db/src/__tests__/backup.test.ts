@@ -39,6 +39,32 @@ describe('backup', () => {
     expect((await b.sync.readOutbox(100)).length).toBe(4)
   })
 
+  it('keeps the local profile email instead of the backup email', async () => {
+    const { s: a } = await seeded('user-a')
+    const backup = await a.exportBackup('user-a')
+    backup.tables.profiles[0]!.email = 'someone-else@example.com'
+    const b = await newStore()
+    await b.ensureProfile('user-b')
+    await b.sync.applyRemote([{ table: 'profiles', row: { ...(await b.sync.getRow('profiles', 'user-b'))!, email: 'me@example.com', updated_at: '2030-01-01T00:00:00.000Z' } }], null)
+
+    await b.importBackup('user-b', backup)
+
+    const p = (await b.getProfile('user-b'))!
+    expect(p.email).toBe('me@example.com')
+    expect(p.display_name).toBe('Ada')
+    const queued = (await b.sync.readOutbox(100)).find((e) => e.change.table === 'profiles')!
+    expect(queued.change.row.email).toBe('me@example.com')
+  })
+
+  it('imports a profile with an empty email when there is no local profile', async () => {
+    const { s: a } = await seeded('user-a')
+    const backup = await a.exportBackup('user-a')
+    backup.tables.profiles[0]!.email = 'someone-else@example.com'
+    const b = await newStore()
+    await b.importBackup('user-b', backup)
+    expect((await b.getProfile('user-b'))!.email).toBe('')
+  })
+
   it('keeps newer live local rows', async () => {
     const { s, h } = await seeded('u')
     const backup = await s.exportBackup('u')
