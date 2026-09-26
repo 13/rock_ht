@@ -49,10 +49,8 @@ export function parseVersion(input: string): Version | null {
 
   let pre: (string | number)[] = [];
   if (preStr) {
-    pre = preStr.split(".").map((part) => {
-      const numPart = parseInt(part, 10);
-      return isNaN(numPart) ? part : numPart;
-    });
+    // Only all-digit identifiers are numeric (semver §9); "1a" stays a string
+    pre = preStr.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : part));
   }
 
   return { major, minor, patch, pre };
@@ -116,9 +114,11 @@ export function compareVersions(a: Version, b: Version): number {
       return 1;
     } else {
       // Both strings: compare lexically
-      const comparison = (aPart as string).localeCompare(bPart as string);
-      if (comparison !== 0) {
-        return comparison;
+      // Semver compares identifiers in ASCII order, not by locale
+      const aStr = aPart as string;
+      const bStr = bPart as string;
+      if (aStr !== bStr) {
+        return aStr < bStr ? -1 : 1;
       }
     }
   }

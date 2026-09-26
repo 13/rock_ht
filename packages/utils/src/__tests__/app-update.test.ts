@@ -13,6 +13,9 @@ describe("parseVersion", () => {
     expect(parseVersion("v0.3.0")).toEqual({ major: 0, minor: 3, patch: 0, pre: [] });
     expect(parseVersion("0.3.0-dev.106")).toEqual({ major: 0, minor: 3, patch: 0, pre: ["dev", 106] });
   });
+  it("keeps mixed alphanumeric pre-release parts as strings", () => {
+    expect(parseVersion("0.3.0-1a.rc2")).toEqual({ major: 0, minor: 3, patch: 0, pre: ["1a", "rc2"] });
+  });
   it("rejects malformed input", () => {
     for (const s of ["", "1.2", "abc", "1.2.x", "v", "1.2.3-"]) expect(parseVersion(s)).toBeNull();
   });
@@ -28,6 +31,9 @@ describe("compareVersions", () => {
       expect(compareVersions(v(next), v(current))).toBeGreaterThan(0);
     }
     expect(compareVersions(v("v1.2.3"), v("1.2.3"))).toBe(0);
+    // numeric identifiers sort before alphanumeric ones; strings compare by code unit
+    expect(compareVersions(v("1.0.0-2"), v("1.0.0-1a"))).toBeLessThan(0);
+    expect(compareVersions(v("1.0.0-B"), v("1.0.0-a"))).toBeLessThan(0);
   });
 });
 
