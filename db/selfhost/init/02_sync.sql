@@ -9,8 +9,9 @@
 --
 -- Contract with the mobile client (packages/sync, apps/mobile/lib/sync):
 -- * push merges each change by last-write-wins on updated_at, one change at
---   a time; a change that can't be applied (bad value, constraint) is skipped
---   and never fails the batch. Any other error (timeouts, deadlocks, lost
+--   a time; a change that can't be applied (bad value, constraint, or an id
+--   another account owns) is skipped, reported in the result's `skipped`
+--   list, and never fails the batch. Any other error (timeouts, deadlocks, lost
 --   connections) fails the whole push, so the client retries it unacked.
 -- * pull pages rows by server_seq; the cursor is the last seq returned.
 -- * instants are emitted as `toISOString()` strings (ms precision, 'Z').
@@ -84,13 +85,22 @@ create or replace trigger journal_sync_seq before insert or update on public.jou
 -- Merge a device's changes (at most 500 per call) into p_user's rows.
 -- Rows are always written as p_user's: a pushed user_id (or profile id) is ignored,
 -- and a row id that already belongs to another user is left alone.
-create or replace function public.sync_push_for(p_user uuid, p_changes jsonb)
-returns void language plpgsql as $$
+-- Returns `{ "skipped": [{ "tbl", "id", "reason", "detail"? }] }`: every change that was
+-- not applied and never will be, so the client can tell the user instead of saying
+-- "synced". reason is 'foreign_owner' (the id, or a completion's habit, is another
+-- user's) or 'invalid' (bad value, constraint, missing parent; detail = the error).
+-- A change that merely loses last-write-wins is not skipped: the server has newer.
+-- Dropped first because an earlier version returned void (create or replace can't
+-- change a return type); the only caller is the push route.
+drop function if exists public.sync_push_for(uuid, jsonb);
+create function public.sync_push_for(p_user uuid, p_changes jsonb)
+returns jsonb language plpgsql as $$
 declare
   c jsonb;
   r jsonb;
   v_updated timestamptz;
   v_onboarded boolean;
+  v_skipped jsonb := '[]'::jsonb;
 begin
   perform public.sync_lock_user(p_user);
   -- Every synced row references the profile. If the sign-up hook failed and this push
@@ -166,12 +176,19 @@ begin
           reminder_enabled = excluded.reminder_enabled, is_archived = excluded.is_archived,
           sort_order = excluded.sort_order, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
         where t.user_id = p_user and t.updated_at < excluded.updated_at;
+        if not found and exists (select 1 from public.habits h
+                                 where h.id = (r->>'id')::uuid and h.user_id <> p_user) then
+          v_skipped := v_skipped || jsonb_build_array(jsonb_build_object(
+            'tbl', c->>'table', 'id', r->>'id', 'reason', 'foreign_owner'));
+        end if;
       when 'habit_completions' then
-        -- A completion of another user's habit is dropped silently (the client acks it).
-        -- A missing habit is not silent: the change is skipped with a warning (outbox order
-        -- pushes parent habits first, so this is a bug).
+        -- A completion of another user's habit is dropped and reported (the client acks it).
+        -- A missing habit is skipped with a warning (outbox order pushes parent habits
+        -- first, so this is a bug).
         if exists (select 1 from public.habits h
                    where h.id = (r->>'habit_id')::uuid and h.user_id <> p_user) then
+          v_skipped := v_skipped || jsonb_build_array(jsonb_build_object(
+            'tbl', c->>'table', 'id', r->>'id', 'reason', 'foreign_owner'));
           continue;
         end if;
         -- Ownership is checked again inside the insert: another user's habit with this id
@@ -192,6 +209,11 @@ begin
           raise exception 'habit % of completion % is missing or not the user''s',
             r->>'habit_id', r->>'id' using errcode = 'foreign_key_violation';
         end if;
+        if not found and exists (select 1 from public.habit_completions t
+                                 where t.id = (r->>'id')::uuid and t.user_id <> p_user) then
+          v_skipped := v_skipped || jsonb_build_array(jsonb_build_object(
+            'tbl', c->>'table', 'id', r->>'id', 'reason', 'foreign_owner'));
+        end if;
       when 'journal_entries' then
         -- The linked habit is optional: a missing one, or one owned by someone else,
         -- is written as null instead of failing (or leaking a foreign reference). The
@@ -208,6 +230,11 @@ begin
           habit_id = excluded.habit_id, entry_date = excluded.entry_date, content = excluded.content,
           mood = excluded.mood, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
         where t.user_id = p_user and t.updated_at < excluded.updated_at;
+        if not found and exists (select 1 from public.journal_entries t
+                                 where t.id = (r->>'id')::uuid and t.user_id <> p_user) then
+          v_skipped := v_skipped || jsonb_build_array(jsonb_build_object(
+            'tbl', c->>'table', 'id', r->>'id', 'reason', 'foreign_owner'));
+        end if;
       else
         raise exception 'unknown sync table %', c->>'table';
       end case;
@@ -217,8 +244,12 @@ begin
     exception when data_exception or integrity_constraint_violation or raise_exception then
       raise warning 'sync_push_for(%): skipped % %: % (%)',
         p_user, c->>'table', c->'row'->>'id', sqlerrm, sqlstate;
+      v_skipped := v_skipped || jsonb_build_array(jsonb_build_object(
+        'tbl', c->>'table', 'id', c->'row'->>'id', 'reason', 'invalid',
+        'detail', sqlerrm || ' (' || sqlstate || ')'));
     end;
   end loop;
+  return jsonb_build_object('skipped', v_skipped);
 end;
 $$;
 

@@ -3,13 +3,21 @@ import { AppState } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react-native";
-import { getSyncState, onSyncPulled, subscribeSync, syncNow, type SyncState } from "@/lib/sync/service";
+import { getSyncState, onSyncPulled, rejectedWarning, subscribeSync, syncNow, type SyncState } from "@/lib/sync/service";
 import { useLocal } from "@/providers/local-provider";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 
-export type SyncStatus = "off" | "idle" | "syncing" | "error" | "signed-out";
+/** "warning": the last runs succeeded, but the server rejected some changes (see `SyncState.rejected`). */
+export type SyncStatus = "off" | "idle" | "syncing" | "error" | "signed-out" | "warning";
 
-export function useSync(): { status: SyncStatus; lastSyncedAt: string | null; error: string | null; syncNow: () => void } {
+export function useSync(): {
+  status: SyncStatus;
+  lastSyncedAt: string | null;
+  error: string | null;
+  /** e.g. "2 changes were rejected by the server"; null when nothing was. */
+  warning: string | null;
+  syncNow: () => void;
+} {
   const [state, setState] = useState<SyncState>(getSyncState);
   useEffect(() => subscribeSync(setState), []);
   return {
@@ -21,9 +29,12 @@ export function useSync(): { status: SyncStatus; lastSyncedAt: string | null; er
           ? "syncing"
           : state.error
             ? "error"
-            : "idle",
+            : state.rejected > 0
+              ? "warning"
+              : "idle",
     lastSyncedAt: state.at,
     error: state.error,
+    warning: rejectedWarning(state.rejected),
     syncNow: () => void syncNow(),
   };
 }

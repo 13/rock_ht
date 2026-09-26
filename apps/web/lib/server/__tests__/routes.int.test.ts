@@ -4,7 +4,9 @@
 // Run: npm run test:int --workspace=apps/web
 import { afterAll, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { completionId, createHttpRemote, SyncAuthError, type SyncChange } from '@rock_ht/sync'
+import Database from 'better-sqlite3'
+import { completionId, createHttpRemote, runSync, SyncAuthError, type SyncChange } from '@rock_ht/sync'
+import { createLocalStore, migrate, type SqlDriver, type SqlParam } from '@rock_ht/local-db'
 import { GET as authGET, POST as authPOST } from '@/app/api/auth/[...all]/route'
 import { POST as pushPOST } from '@/app/api/sync/push/route'
 import { GET as pullGET } from '@/app/api/sync/pull/route'
@@ -278,5 +280,119 @@ describe('push errors', () => {
       await getPool().query('drop trigger zz_test_route_boom on public.habits')
       await getPool().query('drop function test_route_boom()')
     }
+  })
+})
+
+/** In-memory SQLite for a real `LocalStore` (serial, like the device driver; nested transactions run flat). */
+function memoryDriver(): SqlDriver {
+  const db = new Database(':memory:')
+  let queue: Promise<unknown> = Promise.resolve()
+  const serial = <T>(op: () => T | Promise<T>): Promise<T> => {
+    const result = queue.then(op)
+    queue = result.then(() => undefined, () => undefined)
+    return result
+  }
+  function make(inTx: boolean): SqlDriver {
+    const call = <T>(op: () => T): Promise<T> => (inTx ? Promise.resolve().then(op) : serial(op))
+    const d: SqlDriver = {
+      exec: (sql) => call(() => { db.exec(sql) }),
+      run: (sql, params: SqlParam[] = []) => call(() => { db.prepare(sql).run(...params) }),
+      all: <T>(sql: string, params: SqlParam[] = []) => call(() => db.prepare(sql).all(...params) as T[]),
+      first: <T>(sql: string, params: SqlParam[] = []) => call(() => (db.prepare(sql).get(...params) ?? null) as T | null),
+      async transaction(fn) {
+        if (inTx) return fn(d)
+        return serial(async () => {
+          db.exec('BEGIN IMMEDIATE')
+          try { await fn(make(true)); db.exec('COMMIT') } catch (e) { db.exec('ROLLBACK'); throw e }
+        })
+      },
+    }
+    return d
+  }
+  return make(false)
+}
+
+// The Task 13 end-to-end bug, through the real client pieces (LocalStore, runSync, createHttpRemote)
+// and the real route handlers: a device synced to account A, disconnected, then signed up as B.
+describe('one device switching accounts (copy into the new account)', () => {
+  async function device() {
+    const driver = memoryDriver()
+    await migrate(driver)
+    return createLocalStore({ driver, newId: randomUUID, now: () => new Date().toISOString() })
+  }
+  const counts = async (userId: string) => {
+    const q = async (t: string) => Number((await getPool().query(`select count(*) from public.${t} where user_id = $1`, [userId])).rows[0].count)
+    return { habits: await q('habits'), completions: await q('habit_completions'), journal: await q('journal_entries') }
+  }
+
+  it('pushes the device data to B under new ids, leaves A untouched, and reports nothing skipped', async () => {
+    const store = await device()
+    const local = 'local-device'
+    await store.ensureProfile(local)
+    const run = await store.createHabit(local, { title: 'Morning run', icon: '🏃', color: '#f00', frequency: { type: 'daily' } })
+    const read = await store.createHabit(local, { title: 'Read', icon: '📚', color: '#00f', frequency: { type: 'daily' } })
+    await store.setCompletion(local, { habit_id: run.id, date: '2026-09-25' }, true)
+    await store.setCompletion(local, { habit_id: run.id, date: '2026-09-26' }, true)
+    await store.setCompletion(local, { habit_id: read.id, date: '2026-09-26' }, true)
+    await store.createJournal(local, { content: 'good day', habit_id: run.id })
+
+    // Sign up as A and sync (connectSync + syncNow).
+    const a = await signUp('A')
+    await (await store.claim(a.id, { pushLocalProfile: true })).completed
+    expect(await runSync(store.sync, client(a.cookie))).toMatchObject({ skipped: 0 })
+    expect(await counts(a.id)).toEqual({ habits: 2, completions: 3, journal: 1 })
+    const aRowsBefore = (await getPool().query(
+      'select id, title, updated_at from public.habits where user_id = $1 order by id', [a.id])).rows
+
+    // Disconnect (disconnectSync): rows stay under A as the local identity.
+    await store.setMeta('local_user_id', a.id)
+    await store.setMeta('account_user_id', null)
+    await store.setCompletion(a.id, { habit_id: read.id, date: '2026-09-27' }, true) // an offline edit
+
+    // Create account B on the same device.
+    const b = await signUp('B')
+    await (await store.claim(b.id, { pushLocalProfile: true })).completed
+    const report = await runSync(store.sync, client(b.cookie))
+    expect(report.skipped).toBe(0)
+
+    expect(await counts(b.id)).toEqual({ habits: 2, completions: 4, journal: 1 })
+    const bHabits = (await getPool().query('select id, title from public.habits where user_id = $1 order by title', [b.id])).rows
+    expect(bHabits.map((h) => h.title)).toEqual(['Morning run', 'Read'])
+    expect(bHabits.some((h) => h.id === run.id || h.id === read.id)).toBe(false)
+    const bCompletions = (await getPool().query(
+      'select id, habit_id, completed_date::text as d from public.habit_completions where user_id = $1', [b.id])).rows
+    for (const c of bCompletions) expect(c.id).toBe(completionId(c.habit_id, c.d))
+    const bJournal = (await getPool().query('select habit_id from public.journal_entries where user_id = $1', [b.id])).rows
+    expect(bJournal).toEqual([{ habit_id: bHabits.find((h) => h.title === 'Morning run')!.id }])
+
+    // A is exactly as it was: same rows, and the offline edit made after disconnecting didn't reach it.
+    expect(await counts(a.id)).toEqual({ habits: 2, completions: 3, journal: 1 })
+    expect((await getPool().query('select id, title, updated_at from public.habits where user_id = $1 order by id', [a.id])).rows)
+      .toEqual(aRowsBefore)
+
+    // The device now shows B's data under the new ids, and a pull brings back exactly those rows.
+    expect((await store.listHabits(b.id)).map((h) => h.id).sort()).toEqual(bHabits.map((h) => h.id).sort())
+    expect((await store.listCompletions(b.id))).toHaveLength(4)
+  })
+
+  it("returns a pushed change whose id is another account's as skipped (200 { skipped }), and 204 when none", async () => {
+    const a = await signUp()
+    const b = await signUp()
+    const h = randomUUID()
+    const first = await push(a.cookie, { changes: [habit(h, 'theirs', 1)] })
+    expect(first.status).toBe(204)
+    const res = await push(b.cookie, { changes: [habit(h, 'mine', 9)] })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'foreign_owner' }] })
+    // Through the real client: the skipped list comes back from push and runSync counts it.
+    expect(await client(b.cookie).push([habit(h, 'mine', 10)])).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'foreign_owner' }] })
+    const store = await device()
+    await store.ensureProfile(b.id)
+    await store.sync.applyRemote([{ table: 'habits', row: { ...habit(h, 'mine', 11).row, user_id: b.id } }], null)
+    await store.updateHabit({ id: h, title: 'mine, edited' })
+    await store.setMeta('account_user_id', b.id)
+    expect(await runSync(store.sync, client(b.cookie))).toMatchObject({ pushed: 1, skipped: 1 })
+    expect(await store.sync.readOutbox(10)).toEqual([]) // acked: it can never apply
+    expect((await getPool().query('select user_id, title from public.habits where id = $1', [h])).rows).toEqual([{ user_id: a.id, title: 'theirs' }])
   })
 })

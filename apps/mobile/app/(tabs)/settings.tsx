@@ -31,9 +31,10 @@ import { syncNow } from "@/lib/sync/service";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
-function syncLabel(status: SyncStatus, lastSyncedAt: string | null): string {
+function syncLabel(status: SyncStatus, lastSyncedAt: string | null, warning: string | null): string {
   switch (status) {
     case "off": return "Off";
+    case "warning": return warning ?? "Some changes were rejected";
     case "syncing": return "Syncing…";
     case "error": return "Error";
     case "signed-out": return "Signed out — sign in again";
@@ -434,9 +435,15 @@ export default function SettingsScreen() {
         <SectionHeader title="Sync" />
         <SectionCard>
           <SettingRow
-            icon={sync.status === "error" || sync.status === "signed-out" ? "cloud-offline-outline" : "sync-outline"}
+            icon={
+              sync.status === "error" || sync.status === "signed-out"
+                ? "cloud-offline-outline"
+                : sync.status === "warning"
+                  ? "alert-circle-outline"
+                  : "sync-outline"
+            }
             label="Sync"
-            value={syncLabel(sync.status, sync.lastSyncedAt)}
+            value={syncLabel(sync.status, sync.lastSyncedAt, sync.warning)}
             onPress={() => { hapticLight(); router.push("/sync-settings"); }}
           />
         </SectionCard>

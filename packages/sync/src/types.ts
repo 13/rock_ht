@@ -23,8 +23,26 @@ export interface PullResult {
   hasMore: boolean
 }
 
+/** A pushed change the server did not apply and never will (e.g. its id belongs to another account). */
+export interface SkippedChange {
+  tbl: string
+  id: string | null
+  /** `foreign_owner` (the id is another account's) or `invalid` (a bad value or missing parent). */
+  reason: string
+  /** Server detail for `invalid` (the Postgres error message). */
+  detail?: string
+}
+
+export interface PushResult {
+  skipped: SkippedChange[]
+}
+
 export interface SyncRemote {
-  push(changes: SyncChange[]): Promise<void>
+  /**
+   * Resolves once the server has taken the batch. Changes it could never apply come back in
+   * `skipped` (a remote that can't tell may resolve with nothing); they are acked like the rest.
+   */
+  push(changes: SyncChange[]): Promise<PushResult | void>
   pull(cursor: string | null, limit: number): Promise<PullResult>
 }
 

@@ -4,6 +4,8 @@ import type { SyncChange, SyncLocal, SyncRemote } from './types'
 export interface SyncReport {
   pushed: number
   pulled: number
+  /** Pushed changes the server reported it will never apply (still acked: retrying can't help). */
+  skipped: number
 }
 
 /**
@@ -11,7 +13,9 @@ export interface SyncReport {
  *
  * Push first so the pull that follows already reflects our own writes (the server has merged them,
  * so our rows come back at most as equal and are skipped). Each pushed batch is acked only after
- * `remote.push` resolves, so a failed push leaves the outbox intact for the next run. Each pulled page
+ * `remote.push` resolves, so a failed push leaves the outbox intact for the next run. Changes the
+ * server reports as skipped are acked too (they would be skipped again forever) and counted in
+ * `SyncReport.skipped`, so the caller can warn instead of claiming a clean sync. Each pulled page
  * is filtered with `isNewer` against the local row (`local.applyRemote` checks again inside its own
  * transaction, since a local write may land in between) and stored together with its cursor, so an
  * interrupted pull resumes from the last applied page. A page that reports `hasMore` but returns no
@@ -25,11 +29,13 @@ export async function runSync(
   const batchSize = opts.batchSize ?? 200
   let pushed = 0
   let pulled = 0
+  let skipped = 0
 
   for (;;) {
     const entries = await local.readOutbox(batchSize)
     if (entries.length === 0) break
-    await remote.push(entries.map((e) => e.change))
+    const result = await remote.push(entries.map((e) => e.change))
+    skipped += result?.skipped.length ?? 0
     await local.ackOutbox(entries[entries.length - 1]!.seq)
     pushed += entries.length
     if (entries.length < batchSize) break
@@ -55,5 +61,5 @@ export async function runSync(
     if (!page.hasMore) break
   }
 
-  return { pushed, pulled }
+  return { pushed, pulled, skipped }
 }

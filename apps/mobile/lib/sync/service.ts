@@ -13,10 +13,15 @@ export type SyncState = {
   syncing: boolean;
   error: string | null;
   at: string | null;
+  /** Changes the server reported it will never apply (`SyncReport.skipped`), summed since this
+   *  device connected or the user dismissed the warning. Non-zero means "synced, but with losses":
+   *  the UI shows a warning instead of a plain "synced". The changes themselves are acked. */
+  rejected: number;
 };
 
 const LAST_SYNCED_KEY = "last_synced_at";
 const SESSION_CHECKED_KEY = "session_checked_at";
+const REJECTED_KEY = "sync_rejected";
 const SESSION_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 let inFlight: Promise<SyncReport | null> | null = null;
@@ -32,7 +37,7 @@ let paused = false;
 // between the pre-run check and the push/pull). Forces the next run to re-check the session
 // instead of waiting out the 24h interval.
 let lastRunFailedAuth = false;
-let state: SyncState = { off: true, signedOut: false, syncing: false, error: null, at: null };
+let state: SyncState = { off: true, signedOut: false, syncing: false, error: null, at: null, rejected: 0 };
 let loadedAt = false;
 const listeners = new Set<(s: SyncState) => void>();
 const pulledListeners = new Set<(r: SyncReport) => void>();
@@ -44,6 +49,17 @@ function emit(next: Partial<SyncState>) {
 
 export function getSyncState(): SyncState {
   return state;
+}
+
+/** The user-facing warning for `SyncState.rejected`, or null when nothing was rejected. */
+export function rejectedWarning(rejected: number): string | null {
+  if (rejected <= 0) return null;
+  return rejected === 1 ? "1 change was rejected by the server" : `${rejected} changes were rejected by the server`;
+}
+
+function parseCount(raw: string | null): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 export function subscribeSync(fn: (s: SyncState) => void): () => void {
@@ -74,7 +90,12 @@ export async function refreshSyncState(): Promise<void> {
   try {
     const store = await openLocalStore();
     const off = await isOff();
-    emit({ off, signedOut: off ? false : state.signedOut, at: await store.getMeta(LAST_SYNCED_KEY) });
+    emit({
+      off,
+      signedOut: off ? false : state.signedOut,
+      at: await store.getMeta(LAST_SYNCED_KEY),
+      rejected: parseCount(await store.getMeta(REJECTED_KEY)),
+    });
   } catch (e) {
     console.warn("[sync] couldn't read sync state", e);
   }
@@ -86,9 +107,17 @@ export async function resetSyncState(): Promise<void> {
   const store = await openLocalStore();
   await store.setMeta(LAST_SYNCED_KEY, null);
   await store.setMeta(SESSION_CHECKED_KEY, null);
+  await store.setMeta(REJECTED_KEY, null);
   lastRunFailedAuth = false;
-  emit({ error: null, at: null, signedOut: false });
+  emit({ error: null, at: null, signedOut: false, rejected: 0 });
   await refreshSyncState();
+}
+
+/** The user has seen the "rejected by the server" warning: back to a plain sync status. */
+export async function dismissSyncWarning(): Promise<void> {
+  const store = await openLocalStore();
+  await store.setMeta(REJECTED_KEY, null);
+  emit({ rejected: 0 });
 }
 
 function message(e: unknown): string {
@@ -171,6 +200,12 @@ async function runOnce(): Promise<SyncReport | null> {
     const accountAtStart = await store.getMeta("account_user_id");
     const report = await runSync(store.sync, backend.remote);
     lastRunFailedAuth = false;
+    if (report.skipped > 0) {
+      const rejected = parseCount(await store.getMeta(REJECTED_KEY)) + report.skipped;
+      await store.setMeta(REJECTED_KEY, String(rejected));
+      emit({ rejected });
+      console.warn(`[sync] the server rejected ${report.skipped} change(s)`);
+    }
     if ((await store.getMeta("account_user_id")) === accountAtStart) {
       const at = new Date().toISOString();
       await store.setMeta(LAST_SYNCED_KEY, at);

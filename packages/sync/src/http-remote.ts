@@ -1,5 +1,5 @@
 import { normalizeTimestamp } from './merge'
-import type { PullResult, SyncChange, SyncRemote, SyncRow } from './types'
+import type { PullResult, PushResult, SkippedChange, SyncChange, SyncRemote, SyncRow } from './types'
 
 export interface HttpRemoteOptions {
   /** Server origin, e.g. `https://rock.example.com` or `http://192.168.1.10:3000`. A trailing slash is ignored. */
@@ -33,7 +33,8 @@ const TIMEOUT_MS = 20_000
 
 /**
  * `SyncRemote` over the self-hosted server's HTTP API:
- * - `POST {baseUrl}/api/sync/push` body `{ changes }` -> 204
+ * - `POST {baseUrl}/api/sync/push` body `{ changes }` -> 204, or 200 `{ skipped }` when the server
+ *   skipped some changes (either is accepted, so an older server that always answers 204 still works)
  * - `GET {baseUrl}/api/sync/pull?cursor=<string|empty>&limit=<n>` -> 200 `{ changes, cursor, hasMore }`
  * Any non-2xx (e.g. 401 when the session is missing or expired) throws, so `runSync` stops without acking.
  * Every request is aborted after 20s (e.g. a LAN server that stopped answering, or a dropped
@@ -75,8 +76,13 @@ export function createHttpRemote({ baseUrl, fetch: f, getHeaders }: HttpRemoteOp
   }
 
   return {
-    async push(changes) {
-      await call('/api/sync/push', { method: 'POST', body: JSON.stringify({ changes }) })
+    async push(changes): Promise<PushResult> {
+      const res = await call('/api/sync/push', { method: 'POST', body: JSON.stringify({ changes }) })
+      if (res.status === 204) return { skipped: [] }
+      const text = await res.text()
+      if (!text) return { skipped: [] }
+      const body = JSON.parse(text) as { skipped?: SkippedChange[] }
+      return { skipped: Array.isArray(body.skipped) ? body.skipped : [] }
     },
     async pull(cursor, limit): Promise<PullResult> {
       const q = new URLSearchParams({ cursor: cursor ?? '', limit: String(limit) })

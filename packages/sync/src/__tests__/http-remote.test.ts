@@ -15,6 +15,26 @@ describe('createHttpRemote', () => {
     expect(JSON.parse(fetch.mock.calls[0]![1]!.body as string)).toEqual({ changes: [] })
   })
 
+  it('returns no skipped changes for a 204 push (a server that predates skipped reporting)', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(null, { status: 204 }))
+    const r = createHttpRemote({ baseUrl: 'https://x.test', fetch, getHeaders: async () => ({}) })
+    expect(await r.push([])).toEqual({ skipped: [] })
+  })
+
+  it('returns the changes the server reports as skipped', async () => {
+    const skipped = [{ tbl: 'habits', id: 'h1', reason: 'foreign_owner' }]
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify({ skipped }), { status: 200 }))
+    const r = createHttpRemote({ baseUrl: 'https://x.test', fetch, getHeaders: async () => ({}) })
+    expect(await r.push([])).toEqual({ skipped })
+  })
+
+  it('treats a 200 push without a skipped list (or an empty body) as nothing skipped', async () => {
+    const r1 = createHttpRemote({ baseUrl: 'https://x.test', fetch: async () => new Response('{}', { status: 200 }), getHeaders: async () => ({}) })
+    expect(await r1.push([])).toEqual({ skipped: [] })
+    const r2 = createHttpRemote({ baseUrl: 'https://x.test', fetch: async () => new Response('', { status: 200 }), getHeaders: async () => ({}) })
+    expect(await r2.push([])).toEqual({ skipped: [] })
+  })
+
   it('GETs pull with cursor and normalizes timestamps', async () => {
     const body = {
       changes: [{

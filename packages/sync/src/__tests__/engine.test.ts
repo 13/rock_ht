@@ -51,6 +51,29 @@ const habit = (id: string, updated_at: string, title = 'x'): SyncChange => ({
 })
 
 describe('runSync', () => {
+  it('counts the changes the server skipped, and still acks them (they can never apply)', async () => {
+    const l = fakeLocal([], Array.from({ length: 5 }, (_, i) => habit(`s${i}`, '2026-01-01T00:00:00.000Z')))
+    const r = fakeRemote()
+    let calls = 0
+    const remote: SyncRemote = {
+      async push(changes) {
+        await r.remote.push(changes)
+        calls++
+        return { skipped: changes.slice(0, 1).map((c) => ({ tbl: c.table, id: c.row.id, reason: 'foreign_owner' })) }
+      },
+      pull: r.remote.pull,
+    }
+    const report = await runSync(l.local, remote, { batchSize: 2 })
+    expect(calls).toBe(3)
+    expect(report).toMatchObject({ pushed: 5, skipped: 3 })
+    expect(l.outbox()).toHaveLength(0)
+  })
+
+  it('reports zero skipped for a remote whose push returns nothing', async () => {
+    const l = fakeLocal([], [habit('h1', '2026-01-01T00:00:00.000Z')])
+    expect((await runSync(l.local, fakeRemote().remote)).skipped).toBe(0)
+  })
+
   it('pushes the outbox and clears it', async () => {
     const l = fakeLocal([], [habit('h1', '2026-01-01T00:00:00.000Z')])
     const r = fakeRemote()

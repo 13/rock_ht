@@ -19,7 +19,7 @@ import { useSync } from "@/hooks/use-sync";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 import { describeSyncConfig, loadSyncConfig, type SyncConfig } from "@/lib/sync/config";
 import { connectSync, disconnectSync } from "@/lib/sync/account";
-import { refreshSyncState, syncNow } from "@/lib/sync/service";
+import { dismissSyncWarning, refreshSyncState, syncNow } from "@/lib/sync/service";
 import { hapticError, hapticLight, hapticSuccess } from "@/lib/haptics";
 import { useTheme } from "@/theme/theme-provider";
 
@@ -304,7 +304,7 @@ export default function SyncSettingsScreen() {
                     backgroundColor:
                       (sync.status === "error"
                         ? colors.danger
-                        : sync.status === "signed-out"
+                        : sync.status === "signed-out" || sync.status === "warning"
                           ? colors.warning
                           : colors.primary) + "20",
                     alignItems: "center",
@@ -315,10 +315,18 @@ export default function SyncSettingsScreen() {
                     name={
                       sync.status === "error" || sync.status === "signed-out"
                         ? "cloud-offline-outline"
-                        : "cloud-done-outline"
+                        : sync.status === "warning"
+                          ? "alert-circle-outline"
+                          : "cloud-done-outline"
                     }
                     size={18}
-                    color={sync.status === "error" ? colors.danger : sync.status === "signed-out" ? colors.warning : colors.primary}
+                    color={
+                      sync.status === "error"
+                        ? colors.danger
+                        : sync.status === "signed-out" || sync.status === "warning"
+                          ? colors.warning
+                          : colors.primary
+                    }
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -342,6 +350,16 @@ export default function SyncSettingsScreen() {
               </View>
               {sync.status === "error" && sync.error ? (
                 <Text style={{ fontSize: 13, color: colors.danger }}>Last sync failed: {sync.error}</Text>
+              ) : null}
+              {sync.warning && sync.status !== "off" ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 13, color: colors.warning }}>
+                    {sync.warning}. Those changes stay on this device but won't reach your account.
+                  </Text>
+                  <TouchableOpacity onPress={() => { hapticLight(); void dismissSyncWarning(); }} hitSlop={8}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textMuted }}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
               ) : null}
               {errorBox}
               {sync.status !== "signed-out" ? (

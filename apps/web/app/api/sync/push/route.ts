@@ -5,12 +5,15 @@ import { MAX_PUSH_BYTES, MAX_PUSH_CHANGES } from '@/lib/server/sync-limits'
 export const runtime = 'nodejs'
 
 /**
- * `POST /api/sync/push` body `{ changes: SyncChange[] }` -> 204.
+ * `POST /api/sync/push` body `{ changes: SyncChange[] }` -> 204 when every change was applied (or
+ * lost last-write-wins), 200 `{ skipped: [{ tbl, id, reason, detail? }] }` when `sync_push_for`
+ * skipped some (an id another account owns, or a change it can't apply). The client acks both: a
+ * skipped change would be skipped again forever, so it only surfaces the count as a warning.
  * Authenticated by the better-auth session cookie only: the mobile client sends it as an explicit
  * `Cookie` header with no `Origin`, so nothing here may require one. 401 without a session (the
  * client maps it to "signed out"). 415 unless the body is declared as JSON, 413 over 5 MB or 500
  * changes. Each change is merged independently by `sync_push_for`; a change it can't apply is
- * skipped (logged as a Postgres warning), so one bad row never blocks the outbox. Any other
+ * skipped (and reported, see above), so one bad row never blocks the outbox. Any other
  * database error answers 500 with nothing committed, and the client retries without acking.
  */
 export async function POST(req: Request) {
@@ -36,13 +39,18 @@ export async function POST(req: Request) {
   }
   if (!body || !Array.isArray(body.changes)) return new Response('Bad request', { status: 400 })
   if (body.changes.length > MAX_PUSH_CHANGES) return new Response('Too many changes', { status: 413 })
+  let skipped: unknown[]
   try {
-    await getPool().query('select public.sync_push_for($1, $2::jsonb)', [userId, JSON.stringify(body.changes)])
+    const { rows } = await getPool().query<{ result: { skipped?: unknown[] } | null }>(
+      'select public.sync_push_for($1, $2::jsonb) as result', [userId, JSON.stringify(body.changes)])
+    skipped = rows[0]?.result?.skipped ?? []
   } catch (err) {
     console.error('[sync/push] failed', err)
     return new Response('Sync push failed', { status: 500 })
   }
-  return new Response(null, { status: 204 })
+  if (skipped.length === 0) return new Response(null, { status: 204 })
+  console.warn(`[sync/push] ${skipped.length} change(s) skipped for ${userId}`)
+  return Response.json({ skipped }, { status: 200 })
 }
 
 /** The body as text, or null once it exceeds `limit` bytes (reading stops there). */
