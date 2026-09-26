@@ -14,7 +14,8 @@ export interface SyncReport {
  * `remote.push` resolves, so a failed push leaves the outbox intact for the next run. Each pulled page
  * is filtered with `isNewer` against the local row (`local.applyRemote` checks again inside its own
  * transaction, since a local write may land in between) and stored together with its cursor, so an
- * interrupted pull resumes from the last applied page.
+ * interrupted pull resumes from the last applied page. A page that reports `hasMore` but returns no
+ * changes and the cursor it was given throws rather than looping forever.
  */
 export async function runSync(
   local: SyncLocal,
@@ -37,6 +38,12 @@ export async function runSync(
   let cursor = await local.getCursor()
   for (;;) {
     const page = await remote.pull(cursor, batchSize)
+    // A server bug (e.g. a cursor that doesn't advance) would otherwise make this loop spin forever.
+    if (page.hasMore && page.changes.length === 0 && page.cursor === cursor) {
+      throw new Error(
+        `sync pull made no progress: server returned hasMore with no changes and the same cursor (${String(cursor)})`,
+      )
+    }
     const accepted: SyncChange[] = []
     for (const change of page.changes) {
       const existing = await local.getRow(change.table, change.row.id)

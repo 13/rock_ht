@@ -34,6 +34,11 @@ export interface OutboxEntry {
 }
 
 export interface SyncLocal {
+  /**
+   * The oldest `limit` outbox entries, in push order. Reading marks the returned entries in-flight:
+   * they are never compacted (rewritten in place by a later edit of the same row) until acked, so an
+   * ack can't drop an edit that was never pushed; later edits of those rows append new entries.
+   */
   readOutbox(limit: number): Promise<OutboxEntry[]>
   /** Delete outbox entries with seq <= uptoSeq. */
   ackOutbox(uptoSeq: number): Promise<void>

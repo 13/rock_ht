@@ -117,4 +117,28 @@ describe('runSync', () => {
     expect(a.data.get('habits:h4')?.title).toBe('from B')
     expect(r.rows.get('habits:h4')?.change.row.title).toBe('from B')
   })
+
+  it('throws instead of spinning when a page has hasMore with an unchanged cursor and no changes', async () => {
+    const l = fakeLocal()
+    let calls = 0
+    const remote: SyncRemote = {
+      async push() {},
+      async pull(cursor) {
+        if (++calls > 5) throw new Error('pull loop did not stop')
+        return { changes: [], cursor, hasMore: true }
+      },
+    }
+    await expect(runSync(l.local, remote)).rejects.toThrow(/no progress/)
+    expect(calls).toBe(1)
+  })
+
+  it('keeps pulling when the cursor stays the same but the page had changes', async () => {
+    const l = fakeLocal()
+    const pages: PullResult[] = [
+      { changes: [habit('h1', '2026-01-01T00:00:00.000Z')], cursor: null, hasMore: true },
+      { changes: [], cursor: null, hasMore: false },
+    ]
+    const remote: SyncRemote = { async push() {}, async pull() { return pages.shift()! } }
+    await expect(runSync(l.local, remote)).resolves.toMatchObject({ pulled: 1 })
+  })
 })
