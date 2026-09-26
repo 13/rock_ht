@@ -143,6 +143,42 @@ export function sha256FromDigest(digest: string | null | undefined): string | nu
   return match[1].toLowerCase();
 }
 
+/**
+ * What a release asset's `digest` field obligates the caller to do:
+ * - `none`: no (usable) digest was published; integrity is unverifiable and
+ *   the caller should proceed with `verified: false`.
+ * - `sha256`: a well-formed `sha256:<64 hex>` digest was published; the
+ *   caller must verify the download against `hex` and fail closed on mismatch.
+ * - `invalid`: the digest claims to be sha256 but is malformed; the caller
+ *   must fail closed (treat as untrustworthy, not merely "unverified").
+ */
+export type DigestExpectation = { kind: "none" } | { kind: "sha256"; hex: string } | { kind: "invalid" };
+
+export function digestExpectation(digest: string | null | undefined): DigestExpectation {
+  if (!digest) {
+    return { kind: "none" };
+  }
+
+  if (!/^sha256:/i.test(digest)) {
+    return { kind: "none" };
+  }
+
+  const match = digest.match(/^sha256:([0-9a-fA-F]{64})$/i);
+  if (!match || !match[1]) {
+    return { kind: "invalid" };
+  }
+
+  return { kind: "sha256", hex: match[1].toLowerCase() };
+}
+
+export function bytesToHex(bytes: Uint8Array): string {
+  let hex = "";
+  for (let i = 0; i < bytes.length; i++) {
+    hex += (bytes[i] as number).toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
 export function evaluateRelease(installedVersionName: string, release: GitHubRelease): UpdateEvaluation {
   // Step 1: Parse both versions
   const installedVersion = parseVersion(installedVersionName);

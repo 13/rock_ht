@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, evaluateRelease, parseVersion, pickApkAsset, sha256FromDigest, type GitHubRelease } from "../app-update";
+import {
+  bytesToHex,
+  compareVersions,
+  digestExpectation,
+  evaluateRelease,
+  parseVersion,
+  pickApkAsset,
+  sha256FromDigest,
+  type GitHubRelease,
+} from "../app-update";
 
 const v = (s: string) => {
   const p = parseVersion(s);
@@ -58,6 +67,32 @@ describe("pickApkAsset / sha256FromDigest", () => {
     expect(sha256FromDigest("sha1:" + "a".repeat(40))).toBeNull();
     expect(sha256FromDigest("sha256:abc")).toBeNull();
     expect(sha256FromDigest(undefined)).toBeNull();
+  });
+});
+
+describe("bytesToHex", () => {
+  it("hex-encodes bytes with zero padding", () => {
+    expect(bytesToHex(new Uint8Array([0x00, 0x0f, 0xff]))).toBe("000fff");
+  });
+  it("returns an empty string for empty input", () => {
+    expect(bytesToHex(new Uint8Array([]))).toBe("");
+  });
+});
+
+describe("digestExpectation", () => {
+  it("returns none when there is no digest", () => {
+    expect(digestExpectation(undefined)).toEqual({ kind: "none" });
+    expect(digestExpectation(null)).toEqual({ kind: "none" });
+  });
+  it("returns none for a non-sha256 digest", () => {
+    expect(digestExpectation("sha1:" + "a".repeat(40))).toEqual({ kind: "none" });
+  });
+  it("returns sha256 with the lowercased hex for a well-formed sha256 digest", () => {
+    expect(digestExpectation("sha256:" + "A".repeat(64))).toEqual({ kind: "sha256", hex: "a".repeat(64) });
+  });
+  it("returns invalid for a malformed sha256 digest", () => {
+    expect(digestExpectation("sha256:abc")).toEqual({ kind: "invalid" });
+    expect(digestExpectation("SHA256:abc")).toEqual({ kind: "invalid" });
   });
 });
 

@@ -3,8 +3,9 @@ import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import {
+  bytesToHex,
+  digestExpectation,
   evaluateRelease,
-  sha256FromDigest,
   type GitHubRelease,
   type ReleaseAsset,
   type UpdateEvaluation,
@@ -19,6 +20,10 @@ const API_BASE = process.env.EXPO_PUBLIC_UPDATE_API_BASE ?? "https://api.github.
 
 const CHECK_TIMEOUT_MS = 10_000;
 const UPDATES_DIR_NAME = "updates/";
+// Fixed name, independent of the release asset's own file name: the asset
+// name comes from an untrusted GitHub API response and must never be used to
+// build a file-system path.
+const DOWNLOAD_FILE_NAME = "update.apk";
 
 function getUpdatesDir(): string {
   if (!FileSystem.cacheDirectory) {
@@ -27,34 +32,30 @@ function getUpdatesDir(): string {
   return FileSystem.cacheDirectory + UPDATES_DIR_NAME;
 }
 
-function hexEncode(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) {
-    hex += (bytes[i] as number).toString(16).padStart(2, "0");
-  }
-  return hex;
-}
-
 async function computeSha256(fileUri: string): Promise<string> {
   // expo-file-system's `File` class exposes `arrayBuffer()` in SDK 55 (there
-  // is no `bytes()` method on this version), which is accepted directly by
-  // `Crypto.digest` as a `BufferSource` — no base64 round-trip needed.
+  // is no `bytes()` method on this version). `Crypto.digest` types itself as
+  // taking a `BufferSource`, but on Android the native module downcasts the
+  // JS value to a `TypedArray` and reads its `.buffer` — handing it a plain
+  // `ArrayBuffer` throws there. Wrap it in a `Uint8Array` first.
   const buffer = await new File(fileUri).arrayBuffer();
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, buffer);
-  return hexEncode(digest);
+  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(buffer));
+  return bytesToHex(new Uint8Array(digest));
 }
 
 export type CheckResult = UpdateEvaluation | { kind: "network-error"; message: string };
 
 export async function checkForUpdate(): Promise<CheckResult> {
-  await clearUpdateCache();
-
   const { updateRepo, versionName } = getBuildInfo();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
 
   try {
+    // Inside the try: a failure clearing the cache (e.g. a locked file)
+    // should surface as a network-error-shaped result, not an unhandled
+    // rejection from checkForUpdate().
+    await clearUpdateCache();
+
     const response = await fetch(`${API_BASE}/repos/${updateRepo}/releases/latest`, {
       headers: { Accept: "application/vnd.github+json" },
       signal: controller.signal,
@@ -83,6 +84,8 @@ export async function checkForUpdate(): Promise<CheckResult> {
 export type DownloadResult =
   | { kind: "ready"; fileUri: string; verified: boolean }
   | { kind: "digest-mismatch" }
+  // Also what the promise resolves to when `cancel()` wins the race — before
+  // the download starts, mid-download, or mid-hash — with message "Cancelled".
   | { kind: "failed"; message: string };
 
 export function downloadUpdate(
@@ -90,14 +93,27 @@ export function downloadUpdate(
   onProgress: (written: number, total: number) => void,
 ): { promise: Promise<DownloadResult>; cancel: () => Promise<void> } {
   const dir = getUpdatesDir();
-  const fileUri = dir + asset.name;
+  const fileUri = dir + DOWNLOAD_FILE_NAME;
 
-  let settled = false;
+  let settled = false; // the promise has resolved; cancel() becomes a no-op
+  let cancelled = false; // cancel() was called before the promise settled
   let downloadResumable: FileSystem.DownloadResumable | null = null;
+
+  const deleteQuietly = (uri: string) => FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 
   const promise = (async (): Promise<DownloadResult> => {
     try {
+      // Race guard: cancel() called before the download task even exists.
+      if (cancelled) {
+        return { kind: "failed", message: "Cancelled" };
+      }
+
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+
+      // Race guard: cancel() called while makeDirectoryAsync was pending.
+      if (cancelled) {
+        return { kind: "failed", message: "Cancelled" };
+      }
 
       downloadResumable = FileSystem.createDownloadResumable(
         asset.browser_download_url,
@@ -111,46 +127,65 @@ export function downloadUpdate(
       );
 
       const downloaded = await downloadResumable.downloadAsync();
-      if (settled) {
-        // cancel() already deleted the file and owns the outcome.
-        return { kind: "failed", message: "Download was cancelled" };
-      }
-      if (!downloaded) {
-        settled = true;
-        return { kind: "failed", message: "Download was cancelled" };
+
+      if (cancelled || !downloaded) {
+        // `downloadAsync` resolves to undefined when paused; since we only
+        // ever pause from cancel(), treat either signal as a cancellation.
+        await deleteQuietly(fileUri);
+        return { kind: "failed", message: "Cancelled" };
       }
 
-      const expectedSha256 = sha256FromDigest(asset.digest);
-      if (expectedSha256) {
+      if (downloaded.status < 200 || downloaded.status >= 300) {
+        await deleteQuietly(downloaded.uri);
+        return { kind: "failed", message: `Download failed (HTTP ${downloaded.status})` };
+      }
+
+      const expectation = digestExpectation(asset.digest);
+
+      if (expectation.kind === "invalid") {
+        // The release published a "sha256:" digest that doesn't parse as one
+        // — fail closed rather than silently skipping verification.
+        await deleteQuietly(downloaded.uri);
+        return { kind: "failed", message: "Release checksum is malformed" };
+      }
+
+      if (expectation.kind === "sha256") {
         const actualSha256 = await computeSha256(downloaded.uri);
-        if (actualSha256 !== expectedSha256) {
-          await FileSystem.deleteAsync(downloaded.uri, { idempotent: true });
-          settled = true;
+
+        // Race guard: cancel() called while hashing was in flight.
+        if (cancelled) {
+          await deleteQuietly(downloaded.uri);
+          return { kind: "failed", message: "Cancelled" };
+        }
+
+        if (actualSha256 !== expectation.hex) {
+          await deleteQuietly(downloaded.uri);
           return { kind: "digest-mismatch" };
         }
-        settled = true;
+
         return { kind: "ready", fileUri: downloaded.uri, verified: true };
       }
 
-      settled = true;
       return { kind: "ready", fileUri: downloaded.uri, verified: false };
     } catch (error) {
-      settled = true;
-      await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => undefined);
+      await deleteQuietly(fileUri);
       const message = error instanceof Error ? error.message : "Download failed";
       return { kind: "failed", message };
+    } finally {
+      settled = true;
     }
   })();
 
   const cancel = async (): Promise<void> => {
     if (settled) {
+      // Once the promise has resolved, cancel() is a no-op: there is nothing
+      // left to stop and the settled result already owns the outcome.
       return;
     }
-    settled = true;
+    cancelled = true;
     if (downloadResumable) {
       await downloadResumable.pauseAsync().catch(() => undefined);
     }
-    await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => undefined);
   };
 
   return { promise, cancel };
