@@ -10,6 +10,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:int": "vitest run --config vitest.int.config.ts",
+    "test:supabase": "vitest run --config vitest.supabase.config.ts",
     "test:e2e": "playwright test",
     "clean": "rm -rf .next out"
   },

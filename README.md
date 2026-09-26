@@ -211,6 +211,9 @@ npm run db:start
 # Apply migrations and seed
 npm run db:reset
 
+# Integration tests for the sync migration (008): RPC grants, RLS, soft deletes, the web data layer
+npm run test:supabase --workspace=apps/web
+
 # Stop when done
 npm run db:stop
 ```

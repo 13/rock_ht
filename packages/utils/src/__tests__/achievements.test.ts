@@ -28,6 +28,7 @@ function makeHabit(id: string, archived = false): HabitWithFrequency {
     sort_order: 0,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    deleted_at: null,
   }
 }
 
@@ -40,6 +41,8 @@ function makeCompletion(habit_id: string, completed_date: string): CompletionRow
     value: 1,
     note: null,
     created_at: `${completed_date}T10:00:00Z`,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
   }
 }
 

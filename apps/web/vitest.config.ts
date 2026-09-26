@@ -9,7 +9,8 @@ export default defineConfig({
     // mirroring the packages/* convention (src/__tests__).
     include: ['**/__tests__/**/*.test.ts'],
     // `*.int.test.ts` need a real Postgres: `npm run test:int` (vitest.int.config.ts).
-    exclude: [...configDefaults.exclude, '**/*.int.test.ts'],
+    // `*.supabase.test.ts` need a local Supabase stack: `npm run test:supabase` (vitest.supabase.config.ts).
+    exclude: [...configDefaults.exclude, '**/*.int.test.ts', '**/*.supabase.test.ts'],
   },
   resolve: {
     alias: {

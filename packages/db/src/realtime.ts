@@ -12,8 +12,9 @@ type HabitChangeCallback = (payload: {
   old: HabitRow | null;
 }) => void;
 
+// Deletes of habits, completions and journal entries are soft (an UPDATE setting deleted_at).
 type CompletionChangeCallback = (payload: {
-  eventType: "INSERT" | "DELETE";
+  eventType: "INSERT" | "UPDATE" | "DELETE";
   new: CompletionRow | null;
   old: CompletionRow | null;
 }) => void;
@@ -72,7 +73,7 @@ export function subscribeToCompletions(
       },
       (payload) => {
         callback({
-          eventType: payload.eventType as "INSERT" | "DELETE",
+          eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
           new: (payload.new as CompletionRow) ?? null,
           old: (payload.old as CompletionRow) ?? null,
         });

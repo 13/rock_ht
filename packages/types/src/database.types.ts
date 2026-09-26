@@ -22,6 +22,9 @@ export interface Database {
           date_format: "DD.MM.YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD" | "D MMM YYYY";
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
+          /** Server-only change counter; sync pulls strip it, so device rows never have it. */
+          server_seq?: number;
         };
         Insert: {
           id: string;
@@ -35,6 +38,8 @@ export interface Database {
           date_format?: "DD.MM.YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD" | "D MMM YYYY";
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Update: {
           id?: string;
@@ -47,6 +52,8 @@ export interface Database {
           time_format?: "12h" | "24h";
           date_format?: "DD.MM.YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD" | "D MMM YYYY";
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Relationships: [];
       };
@@ -67,6 +74,9 @@ export interface Database {
           sort_order: number;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
+          /** Server-only change counter; sync pulls strip it, so device rows never have it. */
+          server_seq?: number;
         };
         Insert: {
           id?: string;
@@ -84,6 +94,8 @@ export interface Database {
           sort_order?: number;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Update: {
           id?: string;
@@ -100,6 +112,8 @@ export interface Database {
           is_archived?: boolean;
           sort_order?: number;
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Relationships: [
           {
@@ -120,15 +134,23 @@ export interface Database {
           value: number;
           note: string | null;
           created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+          /** Server-only change counter; sync pulls strip it, so device rows never have it. */
+          server_seq?: number;
         };
         Insert: {
-          id?: string;
+          /** Always completion_id(habit_id, completed_date) (`completionId` in @rock_ht/sync): no default. */
+          id: string;
           habit_id: string;
           user_id: string;
           completed_date: string;
           value?: number;
           note?: string | null;
           created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Update: {
           id?: string;
@@ -137,6 +159,9 @@ export interface Database {
           completed_date?: string;
           value?: number;
           note?: string | null;
+          updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Relationships: [
           {
@@ -240,6 +265,9 @@ export interface Database {
           mood: number | null;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
+          /** Server-only change counter; sync pulls strip it, so device rows never have it. */
+          server_seq?: number;
         };
         Insert: {
           id?: string;
@@ -250,6 +278,8 @@ export interface Database {
           mood?: number | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Update: {
           id?: string;
@@ -259,6 +289,8 @@ export interface Database {
           content?: string;
           mood?: number | null;
           updated_at?: string;
+          deleted_at?: string | null;
+          server_seq?: number;
         };
         Relationships: [
           {
@@ -276,6 +308,20 @@ export interface Database {
       recalculate_streak: {
         Args: { p_habit_id: string };
         Returns: void;
+      };
+      /** Offline sync push for auth.uid() (at most 500 changes); `{ skipped: [{ tbl, id, reason: 'rejected' }] }`. */
+      sync_push: {
+        Args: { p_changes: Json };
+        Returns: Json;
+      };
+      /** Offline sync pull for auth.uid(): `{ changes, cursor, hasMore }`, p_limit clamped to 1..500. */
+      sync_pull: {
+        Args: { p_cursor: number; p_limit: number };
+        Returns: Json;
+      };
+      completion_id: {
+        Args: { p_habit: string; p_date: string };
+        Returns: string;
       };
     };
     Enums: {

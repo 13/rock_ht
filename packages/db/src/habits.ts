@@ -8,6 +8,7 @@ import type {
   TablesUpdate,
 } from "@rock_ht/types";
 import { parseFrequency, frequencyToJson } from "@rock_ht/utils";
+import { softDelete } from "./soft-delete";
 
 function parseHabitRow(row: HabitRow): HabitWithFrequency {
   return {
@@ -24,6 +25,7 @@ export async function getHabits(
     .from("habits")
     .select("*")
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .eq("is_archived", false)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
@@ -40,6 +42,7 @@ export async function getAllHabits(
     .from("habits")
     .select("*")
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .order("is_archived", { ascending: true })
     .order("sort_order", { ascending: true });
 
@@ -55,6 +58,7 @@ export async function getHabit(
     .from("habits")
     .select("*")
     .eq("id", habitId)
+    .is("deleted_at", null)
     .single();
 
   if (error) {
@@ -81,6 +85,8 @@ export async function createHabit(
     target_unit: input.target_unit ?? null,
     reminder_time: input.reminder_time ?? null,
     reminder_enabled: input.reminder_enabled ?? false,
+    // Stamped by the writer, like every other client: the server keeps it for last-write-wins.
+    updated_at: new Date().toISOString(),
   };
 
   const { data, error } = await client
@@ -119,6 +125,7 @@ export async function updateHabit(
     .from("habits")
     .update(updatePayload)
     .eq("id", id)
+    .is("deleted_at", null)
     .select()
     .single();
 
@@ -142,7 +149,13 @@ export async function deleteHabit(
   client: TypedSupabaseClient,
   habitId: string
 ): Promise<void> {
-  const { error } = await client.from("habits").delete().eq("id", habitId);
+  // Soft delete: the tombstone syncs to offline devices (a hard delete would never reach them).
+  // The habit's completions stay; every read filters them through their live habit.
+  const { error } = await client
+    .from("habits")
+    .update(softDelete())
+    .eq("id", habitId)
+    .is("deleted_at", null);
   if (error) throw error;
 }
 

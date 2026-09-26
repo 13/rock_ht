@@ -22,6 +22,7 @@ function makeHabit(id: string, title: string = 'Test Habit', icon: string = 'ðŸŽ
     sort_order: 0,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    deleted_at: null,
   }
 }
 
@@ -34,6 +35,8 @@ function makeCompletion(habitId: string, date: string, hour = 9): CompletionRow 
     value: 1,
     note: null,
     created_at: `${date}T${String(hour).padStart(2, '0')}:00:00`,
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
   }
 }
 

@@ -56,6 +56,8 @@ export function useCompletions() {
           value: input.value ?? 1,
           note: input.note ?? null,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
         };
         return [...old, optimistic];
       });

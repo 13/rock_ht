@@ -1,5 +1,6 @@
 import { today } from "@rock_ht/utils";
 import type { TypedSupabaseClient } from "./client";
+import { softDelete } from "./soft-delete";
 import type {
   JournalEntry,
   CreateJournalEntryInput,
@@ -16,6 +17,7 @@ export async function getJournalEntries(
     .from("journal_entries")
     .select("*")
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(options.limit ?? 50);
@@ -40,6 +42,7 @@ export async function getJournalEntryForDate(
     .eq("user_id", userId)
     .eq("entry_date", dateStr)
     .is("habit_id", null)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -59,6 +62,7 @@ export async function createJournalEntry(
     entry_date: input.entry_date ?? today(),
     content: input.content,
     mood: input.mood ?? null,
+    updated_at: new Date().toISOString(),
   };
 
   const { data, error } = await client
@@ -83,6 +87,7 @@ export async function updateJournalEntry(
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.id)
+    .is("deleted_at", null)
     .select()
     .single();
 
@@ -96,8 +101,9 @@ export async function deleteJournalEntry(
 ): Promise<void> {
   const { error } = await client
     .from("journal_entries")
-    .delete()
-    .eq("id", entryId);
+    .update(softDelete())
+    .eq("id", entryId)
+    .is("deleted_at", null);
 
   if (error) throw error;
 }
