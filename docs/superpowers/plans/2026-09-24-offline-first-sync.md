@@ -3160,6 +3160,19 @@ git commit -m "feat(mobile): add pluggable sync settings, HTTP remote and backgr
 
 ### Task 12: Self-hosted Postgres schema, Better Auth and `/api/sync` in Next.js
 
+**Carry-over from the M2 final review (2026-09-26).** The mobile client is final. The server must match it:
+1. **Cursor gaps.** `server_seq` is taken inside the trigger, but transactions commit out of order, so a concurrent puller can skip a row. Start `sync_push_for` with `perform pg_advisory_xact_lock(hashtextextended(p_user::text, 0))`, and take the same lock in every other writer of user rows. Alternatively, bound pulls by `pg_snapshot_xmin`.
+2. **Timestamp precision.** Emit milliseconds from `sync_pull_for`: `to_char(ts at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`. Otherwise `now()` microseconds and `+00:00` offsets reach Hermes' `Date` parser.
+3. **Signup profile.** Create it with `updated_at = '-infinity'`, or epoch, so a phone whose clock runs behind the server still wins the first profile push. Otherwise the pull overwrites `onboarding_completed` and `timezone` with defaults.
+4. **Onboarding flag.** Merge `onboarding_completed` as `existing OR incoming`, so signing in to an account created elsewhere doesn't send an onboarded device back to onboarding.
+5. **One bad change must not block the queue.** Wrap each change in `sync_push_for` in its own `begin … exception` block, and reject or skip it. A journal entry whose `habit_id` is missing, or belongs to another user, is written with `habit_id = null`. Without this, one bad change blocks the device's queue forever, because the client retries the same outbox head.
+6. **Completion ids.** Every server or web writer (M4) must derive completion ids exactly as `uuidv5(habit_id || ':' || completed_date, '6d2f3b8e-8c1a-4b7e-9f2d-5a4c3e2b1d0f')`, with a lowercase uuid and a `YYYY-MM-DD` date. Otherwise `unique (habit_id, completed_date)` fails the push.
+7. **Auth.** The client sends the better-auth cookie only through an explicit `Cookie` header (`credentials: 'omit'`). It expects `401` without a session, which it maps to "signed out", and it refreshes the session through `getSession` at most once a day. The sync routes must not require an `Origin` header. Keep `expo()` and `trustedOrigins: ['rockht://']`.
+8. **Orphans.** Completions whose habit belongs to another user are dropped silently, and the client acks them. The client's outbox ordering guarantees that parent habits are pushed first, so keep the silent drop only for the foreign-owner case.
+9. **Profile on push.** Upsert the profile row on push rather than only updating it, in case the `user.create.after` hook failed.
+10. **Limits.** The client pushes at most 200 changes and pulls with `limit=200`. The server cap stays at 500.
+11. **zod.** better-auth hoists zod 4 to the repo root, while the apps keep zod 3.25.76 nested, with a type-only `zod` path mapping in both tsconfigs. Once better-auth runs server-side in `apps/web`, confirm that Turbopack/Next resolves its zod 4 at runtime and the app code still gets zod 3.
+
 **Files:**
 - Create: `db/selfhost/init/01_schema.sql`, `db/selfhost/init/02_sync.sql`, `db/selfhost/init/03_auth.sql`
 - Create: `apps/web/lib/server/db.ts`, `apps/web/lib/server/auth.ts`, `apps/web/app/api/auth/[...all]/route.ts`, `apps/web/app/api/sync/push/route.ts`, `apps/web/app/api/sync/pull/route.ts`
