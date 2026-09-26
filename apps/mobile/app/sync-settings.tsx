@@ -19,6 +19,7 @@ import { useSync } from "@/hooks/use-sync";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 import { describeSyncConfig, loadSyncConfig, type SyncConfig } from "@/lib/sync/config";
 import { connectSync, disconnectSync } from "@/lib/sync/account";
+import { ConfirmEmailError } from "@/lib/sync/errors";
 import { dismissSyncWarning, refreshSyncState, syncNow } from "@/lib/sync/service";
 import { hapticError, hapticLight, hapticSuccess } from "@/lib/haptics";
 import { useTheme } from "@/theme/theme-provider";
@@ -178,6 +179,8 @@ export default function SyncSettingsScreen() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-error guidance, e.g. "confirm your email, then sign in" after a Supabase sign-up.
+  const [notice, setNotice] = useState<string | null>(null);
   const [hadOtherAccount, setHadOtherAccount] = useState(false);
 
   useEffect(() => {
@@ -215,6 +218,7 @@ export default function SyncSettingsScreen() {
       : kind === "supabase" ? { kind, url: url.trim().replace(/\/+$/, ""), anonKey: anonKey.trim() }
       : { kind: "off" };
     setError(null);
+    setNotice(null);
     setBusy("connect");
     try {
       const accountId = await connectSync(store, config, { mode, email, password, name });
@@ -226,6 +230,14 @@ export default function SyncSettingsScreen() {
       hapticSuccess();
       router.back();
     } catch (e) {
+      if (e instanceof ConfirmEmailError) {
+        // The account exists but has no session yet: nothing was saved or claimed. Switch to sign-in
+        // (keeping email and password) so one tap connects once the email is confirmed.
+        hapticLight();
+        setMode("signin");
+        setNotice(e.message);
+        return;
+      }
       hapticError();
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -265,6 +277,25 @@ export default function SyncSettingsScreen() {
       }}
     >
       <Text style={{ fontSize: 13, color: colors.danger }}>{error}</Text>
+    </View>
+  ) : null;
+
+  const noticeBox = notice ? (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 8,
+        alignItems: "flex-start",
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.primary + "40",
+        backgroundColor: colors.primary + "10",
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+      }}
+    >
+      <Ionicons name="mail-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
+      <Text style={{ flex: 1, fontSize: 13, color: colors.foreground, lineHeight: 18 }}>{notice}</Text>
     </View>
   ) : null;
 
@@ -378,7 +409,7 @@ export default function SyncSettingsScreen() {
             </View>
           ) : (
             <>
-              <Segmented value={kind} onChange={(k) => { setKind(k); setError(null); }} />
+              <Segmented value={kind} onChange={(k) => { setKind(k); setError(null); setNotice(null); }} />
 
               {kind === "off" ? (
                 <>
@@ -455,6 +486,7 @@ export default function SyncSettingsScreen() {
                   />
 
                   {errorBox}
+                  {noticeBox}
 
                   {hadOtherAccount ? (
                     <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
@@ -472,7 +504,7 @@ export default function SyncSettingsScreen() {
                     busy={busy === "connect"}
                   />
                   <TouchableOpacity
-                    onPress={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); }}
+                    onPress={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setNotice(null); }}
                     hitSlop={8}
                     style={{ alignSelf: "center" }}
                   >

@@ -63,7 +63,7 @@ async function selfHostBackend(baseUrl: string): Promise<SyncBackend> {
 // One backend (and auth client) per config, so cookies/session caching live across syncs.
 let cached: { key: string; backend: Promise<SyncBackend> } | null = null;
 
-/** `null` for Off. Throws for a config that can't be used (e.g. Supabase before Task 15). */
+/** `null` for Off. Throws for a config that can't be used (e.g. a URL that isn't http(s)). */
 export async function createBackend(c: SyncConfig): Promise<SyncBackend | null> {
   if (c.kind === "off") return null;
   const key = JSON.stringify(c);
@@ -71,7 +71,8 @@ export async function createBackend(c: SyncConfig): Promise<SyncBackend | null> 
     const backend =
       c.kind === "selfhost"
         ? selfHostBackend(normalizeServerUrl(c.baseUrl))
-        : import("./supabase-backend").then((m) => m.supabaseBackend(c.url, c.anonKey));
+        : // Loaded on first use so the Off and self-hosted paths never evaluate supabase-js.
+          import("./supabase-backend").then((m) => m.supabaseBackend(normalizeServerUrl(c.url), c.anonKey.trim()));
     cached = { key, backend };
     // Don't cache a failure: the next attempt (e.g. after an app update) tries again.
     backend.catch(() => { if (cached?.key === key) cached = null; });
