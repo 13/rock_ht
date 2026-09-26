@@ -301,23 +301,42 @@ export default function SyncSettingsScreen() {
                     width: 36,
                     height: 36,
                     borderRadius: 10,
-                    backgroundColor: (sync.status === "error" ? colors.danger : colors.primary) + "20",
+                    backgroundColor:
+                      (sync.status === "error"
+                        ? colors.danger
+                        : sync.status === "signed-out"
+                          ? colors.warning
+                          : colors.primary) + "20",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
                   <Ionicons
-                    name={sync.status === "error" ? "cloud-offline-outline" : "cloud-done-outline"}
+                    name={
+                      sync.status === "error" || sync.status === "signed-out"
+                        ? "cloud-offline-outline"
+                        : "cloud-done-outline"
+                    }
                     size={18}
-                    color={sync.status === "error" ? colors.danger : colors.primary}
+                    color={sync.status === "error" ? colors.danger : sync.status === "signed-out" ? colors.warning : colors.primary}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }} numberOfLines={1}>
                     {describeSyncConfig(saved)}
                   </Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                    {sync.status === "syncing" ? "Syncing…" : formatLastSynced(sync.lastSyncedAt)}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: sync.status === "signed-out" ? colors.warning : colors.textMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    {sync.status === "syncing"
+                      ? "Syncing…"
+                      : sync.status === "signed-out"
+                        ? "Signed out — sign in again"
+                        : formatLastSynced(sync.lastSyncedAt)}
                   </Text>
                 </View>
               </View>
@@ -325,7 +344,9 @@ export default function SyncSettingsScreen() {
                 <Text style={{ fontSize: 13, color: colors.danger }}>Last sync failed: {sync.error}</Text>
               ) : null}
               {errorBox}
-              <Button label="Sync now" onPress={sync.syncNow} busy={sync.status === "syncing"} />
+              {sync.status !== "signed-out" ? (
+                <Button label="Sync now" onPress={sync.syncNow} busy={sync.status === "syncing"} />
+              ) : null}
               <Button label="Disconnect" variant="danger" onPress={disconnect} busy={busy === "disconnect"} />
               <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 17 }}>
                 Disconnecting keeps all your data on this device. Changes made while disconnected upload

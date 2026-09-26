@@ -36,6 +36,7 @@ function syncLabel(status: SyncStatus, lastSyncedAt: string | null): string {
     case "off": return "Off";
     case "syncing": return "Syncing…";
     case "error": return "Error";
+    case "signed-out": return "Signed out — sign in again";
     case "idle": {
       if (!lastSyncedAt) return "On";
       const mins = Math.round((Date.now() - new Date(lastSyncedAt).getTime()) / 60_000);
@@ -433,7 +434,7 @@ export default function SettingsScreen() {
         <SectionHeader title="Sync" />
         <SectionCard>
           <SettingRow
-            icon={sync.status === "error" ? "cloud-offline-outline" : "sync-outline"}
+            icon={sync.status === "error" || sync.status === "signed-out" ? "cloud-offline-outline" : "sync-outline"}
             label="Sync"
             value={syncLabel(sync.status, sync.lastSyncedAt)}
             onPress={() => { hapticLight(); router.push("/sync-settings"); }}

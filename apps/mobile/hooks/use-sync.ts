@@ -7,13 +7,21 @@ import { getSyncState, onSyncPulled, subscribeSync, syncNow, type SyncState } fr
 import { useLocal } from "@/providers/local-provider";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
 
-export type SyncStatus = "off" | "idle" | "syncing" | "error";
+export type SyncStatus = "off" | "idle" | "syncing" | "error" | "signed-out";
 
 export function useSync(): { status: SyncStatus; lastSyncedAt: string | null; error: string | null; syncNow: () => void } {
   const [state, setState] = useState<SyncState>(getSyncState);
   useEffect(() => subscribeSync(setState), []);
   return {
-    status: state.off ? "off" : state.syncing ? "syncing" : state.error ? "error" : "idle",
+    status: state.off
+      ? "off"
+      : state.signedOut
+        ? "signed-out"
+        : state.syncing
+          ? "syncing"
+          : state.error
+            ? "error"
+            : "idle",
     lastSyncedAt: state.at,
     error: state.error,
     syncNow: () => void syncNow(),

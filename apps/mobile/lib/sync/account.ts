@@ -1,7 +1,7 @@
 import type { LocalStore } from "@rock_ht/local-db";
 import { loadSyncConfig, saveSyncConfig, type SyncConfig } from "./config";
 import { createBackend, type SyncBackend } from "./remote-factory";
-import { resetSyncState } from "./service";
+import { pauseSync, resetSyncState, resumeSync, waitForSyncIdle } from "./service";
 
 /** Turns fetch's bare "Network request failed" into something a user can act on. */
 function friendly(e: unknown, config: SyncConfig): Error {
@@ -24,34 +24,43 @@ export async function connectSync(
   config: SyncConfig,
   creds: { mode: "signin" | "signup"; email: string; password: string; name: string },
 ): Promise<string> {
-  let backend: SyncBackend;
-  let accountId: string;
+  // Stop new sync runs from starting (a launch/foreground/interval trigger could otherwise read
+  // the config or account id mid-change) and let any run already in flight finish first, since it
+  // was reading the *previous* account/config.
+  pauseSync();
   try {
-    const b = await createBackend(config);
-    if (!b) throw new Error("Choose a sync server first.");
-    backend = b;
-    accountId =
-      creds.mode === "signup"
-        ? await backend.signUp(creds.email.trim(), creds.password, creds.name.trim())
-        : await backend.signIn(creds.email.trim(), creds.password);
-  } catch (e) {
-    throw friendly(e, config);
-  }
-  try {
-    await saveSyncConfig(config);
-    // Early-returns in the store when this device's rows already belong to accountId.
-    const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" });
-    await completed;
-    return accountId;
-  } catch (e) {
-    // The sign-in/up above already stored a session cookie for accountId. If anything after
-    // that fails, the connection didn't go through, so leaving that cookie in place would let a
-    // later, unrelated action (or a retry against a different server) silently run under this
-    // half-connected account. Sign out locally — best effort, and works offline, since
-    // @better-auth/expo clears its SecureStore cookie before it even attempts the network
-    // request for /sign-out — before rethrowing.
-    await backend.signOut().catch(() => {});
-    throw e;
+    await waitForSyncIdle();
+    let backend: SyncBackend;
+    let accountId: string;
+    try {
+      const b = await createBackend(config);
+      if (!b) throw new Error("Choose a sync server first.");
+      backend = b;
+      accountId =
+        creds.mode === "signup"
+          ? await backend.signUp(creds.email.trim(), creds.password, creds.name.trim())
+          : await backend.signIn(creds.email.trim(), creds.password);
+    } catch (e) {
+      throw friendly(e, config);
+    }
+    try {
+      await saveSyncConfig(config);
+      // Early-returns in the store when this device's rows already belong to accountId.
+      const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" });
+      await completed;
+      return accountId;
+    } catch (e) {
+      // The sign-in/up above already stored a session cookie for accountId. If anything after
+      // that fails, the connection didn't go through, so leaving that cookie in place would let a
+      // later, unrelated action (or a retry against a different server) silently run under this
+      // half-connected account. Sign out locally — best effort, and works offline, since
+      // @better-auth/expo clears its SecureStore cookie before it even attempts the network
+      // request for /sign-out — before rethrowing.
+      await backend.signOut().catch(() => {});
+      throw e;
+    }
+  } finally {
+    resumeSync();
   }
 }
 
@@ -61,17 +70,25 @@ export async function connectSync(
  * refreshes the local identity.
  */
 export async function disconnectSync(store: LocalStore): Promise<void> {
-  const config = await loadSyncConfig();
+  // Same reasoning as connectSync: stop new runs and wait out any run already in flight before
+  // rewriting the account id and config it reads.
+  pauseSync();
   try {
-    const backend = await createBackend(config);
-    await backend?.signOut();
-  } catch (e) {
-    console.warn("[sync] sign-out failed; disconnecting locally anyway", e);
+    await waitForSyncIdle();
+    const config = await loadSyncConfig();
+    try {
+      const backend = await createBackend(config);
+      await backend?.signOut();
+    } catch (e) {
+      console.warn("[sync] sign-out failed; disconnecting locally anyway", e);
+    }
+    const accountId = await store.getMeta("account_user_id");
+    // Local id first, so resolveUserId never sees neither id and mints a fresh one.
+    if (accountId) await store.setMeta("local_user_id", accountId);
+    await store.setMeta("account_user_id", null);
+    await saveSyncConfig({ kind: "off" });
+    await resetSyncState();
+  } finally {
+    resumeSync();
   }
-  const accountId = await store.getMeta("account_user_id");
-  // Local id first, so resolveUserId never sees neither id and mints a fresh one.
-  if (accountId) await store.setMeta("local_user_id", accountId);
-  await store.setMeta("account_user_id", null);
-  await saveSyncConfig({ kind: "off" });
-  await resetSyncState();
 }

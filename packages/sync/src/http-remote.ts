@@ -1,5 +1,5 @@
 import { normalizeTimestamp } from './merge'
-import type { PullResult, SyncChange, SyncRemote } from './types'
+import type { PullResult, SyncChange, SyncRemote, SyncRow } from './types'
 
 export interface HttpRemoteOptions {
   /** Server origin, e.g. `https://rock.example.com` or `http://192.168.1.10:3000`. A trailing slash is ignored. */
@@ -12,9 +12,21 @@ export interface HttpRemoteOptions {
 
 /** Postgres returns `+00:00` offsets and microseconds; the local store compares `toISOString()` strings. */
 export function normalizeChange(c: SyncChange): SyncChange {
-  const row = { ...c.row, updated_at: normalizeTimestamp(c.row.updated_at) }
+  // Annotated explicitly: object-spread drops SyncRow's index signature from the inferred type,
+  // which would make the `row.created_at` access below a type error.
+  const row: SyncRow = { ...c.row, updated_at: normalizeTimestamp(c.row.updated_at) }
   if (row.deleted_at) row.deleted_at = normalizeTimestamp(row.deleted_at)
+  if (typeof row.created_at === 'string') row.created_at = normalizeTimestamp(row.created_at)
   return { table: c.table, row }
+}
+
+/** The session cookie is missing or expired. Callers map this to a distinct "signed-out" state
+ *  instead of a generic sync error, since retrying won't help until the user signs in again. */
+export class SyncAuthError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message)
+    this.name = 'SyncAuthError'
+  }
 }
 
 const TIMEOUT_MS = 20_000
@@ -46,10 +58,16 @@ export function createHttpRemote({ baseUrl, fetch: f, getHeaders }: HttpRemoteOp
     })
     try {
       const headers = { 'Content-Type': 'application/json', ...(await getHeaders()) }
-      const fetching = doFetch(`${base}${path}`, { ...init, signal: controller.signal, headers })
+      // credentials: 'omit' so only the explicit Cookie header (from getHeaders) is ever sent —
+      // fetch's own cookie jar (e.g. a browser/webview one) never leaks in alongside it.
+      const fetching = doFetch(`${base}${path}`, { ...init, signal: controller.signal, headers, credentials: 'omit' })
       fetching.catch(() => {}) // avoid an unhandled rejection if the timeout wins the race
       const res = await Promise.race([fetching, timeout])
-      if (!res.ok) throw new Error(`sync ${path.split('?')[0]} failed: ${res.status}`)
+      if (!res.ok) {
+        const label = `sync ${path.split('?')[0]} failed: ${res.status}`
+        if (res.status === 401) throw new SyncAuthError(label)
+        throw new Error(label)
+      }
       return res
     } finally {
       clearTimeout(timer)
