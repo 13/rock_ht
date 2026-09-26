@@ -2,12 +2,12 @@
 
 A prioritised list of improvements, based on this session's CI runs, the code reviews and a quick audit. Each item names the evidence, the fix and the size (S < 1h, M ≈ half a day, L = multi-day, which needs its own plan). Items marked ★ are real user-facing bugs.
 
-## Status (2026-09-25, evening)
+## Status (2026-09-26)
 
-- **Done:** P0 #1–#4 (`2026-09-25-p0-fixes.md`); #11 milestone M1 (offline-first Tasks 1–9, see the commits up to `6413486`); #16 and #17 (`supabase/migrations/007_timezone_streaks.sql` makes `recalculate_streak` judge "today" in the user's `profiles.timezone`; the web app now writes the browser's IANA time zone onto the profile on load; the AI routes and `getLast30DaysCompletions` now take the user's local date via `todayIn`).
-- **Partly done:** #5, because `scripts/build-apk.sh` signs local builds with the release key but CI still signs with the debug key. #8, because `@rock_ht/sync` and `@rock_ht/local-db` now have tests but the web routes and UI still don't.
-- **Found since:** the web export filename still takes its date from `toISOString()` (`apps/web/app/(app)/settings/page.tsx:120`).
-- **Next:** #5–#7 in `2026-09-25-apk-release-pipeline.md`.
+- **Done:** P0 #1–#4; #5–#7 APK pipeline (`2026-09-25-apk-release-pipeline.md`); #8 web test safety net (vitest route tests + Playwright smoke); #9/#10 clean build; #16/#17 timezone fixes (migration 007); #11 offline-first milestones M1, M2 (sync engine, sync settings) and M3 (self-hosted server, `docker-compose.selfhost.yml`).
+- **Also done:** mobile gaps (bottom sheet scroll, reminder time picker, five themes, persisted reminders switch), About section + in-app updates from GitHub releases (`2026-09-26-about-and-updates.md`).
+- **Owner actions pending:** push `main`; upload signing secrets to the `release` environment; tag `v0.3.0` then bump `app.json` to 0.4.0; make `ghcr.io/13/rock_ht-web` public; deploy migration 007 to the hosted Supabase.
+- **Next:** M4 (Supabase as optional sync backend, Tasks 14–15, carry-over lists in the plan); #12 rate limiter across replicas; #13 Docker HEALTHCHECK; #14 split large web pages; #15 Dependabot / pinned actions; iOS verification of the time picker and updater.
 
 ## P0: broken now (small, do first)
 
