@@ -63,4 +63,9 @@ USER nextjs
 
 EXPOSE 3000
 
+# Lets `docker ps`, compose `depends_on: condition: service_healthy` and
+# orchestrators see a dead server. busybox wget ships with alpine.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" >/dev/null || exit 1
+
 CMD ["node", "apps/web/server.js"]
