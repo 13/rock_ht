@@ -83,6 +83,25 @@ describe('backup', () => {
     expect((await s.getHabit(h.id))!.title).toBe('Read')
   })
 
+  it('never revives a tombstone carried by the backup (hand-edited or older export)', async () => {
+    const { s, h } = await seeded('user-a')
+    const backup = await s.exportBackup('user-a')
+    backup.tables.habits[0] = { ...backup.tables.habits[0]!, deleted_at: '2026-01-03T00:00:00.000Z' }
+    const extra: SyncRow = { ...backup.tables.journal_entries[0]!, id: randomUUID(), deleted_at: '2026-01-03T00:00:00.000Z' }
+    backup.tables.journal_entries.push(extra)
+
+    const fresh = await newStore()
+    const res = await fresh.importBackup('user-a', backup)
+    // The habit, its completion and the journal entry.
+    expect(res.skipped).toBe(3)
+    expect(await fresh.getHabit(h.id)).toBeNull()
+    expect(ids(await fresh.listJournal('user-a'))).not.toContain(extra.id)
+
+    // Nor does it delete the live local copy.
+    await s.importBackup('user-a', backup)
+    expect((await s.getHabit(h.id))!.title).toBe('Read')
+  })
+
   it('does not export tombstones', async () => {
     const { s, h } = await seeded('u')
     await s.deleteHabit(h.id)
@@ -191,7 +210,9 @@ describe('backup import onto a device of another account (re-keyed like claim)',
     backup.tables.habit_completions.push({ ...backup.tables.habit_completions[0]!, habit_id: gone.id, id: completionId(gone.id, '2026-01-02') })
     const b = await signedIn('account-B')
 
-    await b.importBackup('account-B', backup)
+    // Profile, Read, its completion and the three journal entries; the tombstone and its
+    // orphaned completion are dropped and counted.
+    expect(await b.importBackup('account-B', backup)).toEqual({ imported: 6, skipped: 2 })
 
     const habits = await b.listHabits('account-B', { includeArchived: true })
     expect(habits.map((x) => x.title)).toEqual(['Read'])
@@ -231,6 +252,31 @@ describe('backup import onto a device of another account (re-keyed like claim)',
     await b.setMeta('account_user_id', null)
     await b.importBackup('account-B', backup)
     expect(ids(await b.listHabits('account-B'))).not.toContain(h.id)
+  })
+
+  it('keeps the ids of a backup of the local identity this account claimed (the same data)', async () => {
+    // Exported offline, then the device signed in (claim keeps a purely local identity's ids).
+    const { s: b, h } = await seeded('local-1')
+    await b.setMeta('local_user_id', 'local-1')
+    const backup = await b.exportBackup('local-1')
+    await (await b.claim('account-X', { pushLocalProfile: true })).completed
+
+    expect(await b.importBackup('account-X', backup)).toEqual({ imported: 1, skipped: 3 })
+    expect(ids(await b.listHabits('account-X'))).toEqual([h.id])
+    expect(ids(await b.listCompletions('account-X'))).toEqual([completionId(h.id, '2026-01-02')])
+    expect(await b.listJournal('account-X')).toHaveLength(1)
+  })
+
+  it('re-keys a backup of the local identity once its ids went to an earlier account', async () => {
+    const { s: b, h } = await seeded('local-1')
+    await b.setMeta('local_user_id', 'local-1')
+    const backup = await b.exportBackup('local-1')
+    // Claimed into W first (the local ids are on W's server), then switched to X (re-keyed).
+    await (await b.claim('account-W', { pushLocalProfile: true })).completed
+    await (await b.claim('account-X', { pushLocalProfile: false })).completed
+
+    await b.importBackup('account-X', backup)
+    expect(ids(await b.listHabits('account-X'))).not.toContain(h.id)
   })
 
   describe('on a device with no account yet', () => {

@@ -10,7 +10,7 @@ import type {
 import { BACKUP_FORMAT, BACKUP_VERSION, type Backup } from './backup'
 import { COLUMNS, fromSqlRow, toSqlRow } from './codec'
 import type { SqlDriver, SqlParam } from './driver'
-import { rekeyRows, type RekeyTables } from './rekey'
+import { countRows, dropTombstones, rekeyRows, type RekeyTables } from './rekey'
 
 export interface LocalStoreDeps {
   driver: SqlDriver
@@ -47,6 +47,12 @@ const ACCOUNTS_KEY = 'claimed_accounts'
  * to any other account re-keys them. Cleared by the next claim that rewrites the rows.
  */
 const IMPORTED_KEY = 'imported_accounts'
+/**
+ * The device's own identity for rows written while no account is signed in (minted by the mobile
+ * app's `resolveUserId`). `disconnectSync` sets it to the account being left, so it only differs from
+ * every claimed account while it is still the purely local identity.
+ */
+const LOCAL_KEY = 'local_user_id'
 const REKEYED_TABLES = ['habits', 'habit_completions', 'journal_entries'] as const
 
 /**
@@ -364,25 +370,39 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * - on a device with no account yet, they keep their ids (signing in to the backup's own account
    *   then merges with it, the common "restore on a new phone, then sign in" path), and the owners
    *   are recorded in `IMPORTED_KEY` so that a `claim` to any other account re-keys them.
+   * A backup of this device's purely local identity (`LOCAL_KEY`, never an account itself) counts as
+   * userId's own when userId is the first account the device claimed: that claim kept the local ids,
+   * so they are userId's on the server too. (A later account switch re-keyed them; then it's foreign.)
+   *
+   * Tombstones in a backup are never imported, on either path (`dropTombstones`; `rekeyRows` applies
+   * the same rule): restoring a backup neither deletes local data nor revives it as a live row. Rows
+   * dropped that way count as `skipped`, like rows the local copy already has newer.
    */
   async function importBackup(userId: string, backup: Backup): Promise<{ imported: number; skipped: number }> {
     let imported = 0
     let skipped = 0
     await driver.transaction(async (tx) => {
-      let rows: RekeyTables = {
+      const all: RekeyTables = {
         habits: backup.tables.habits,
         habit_completions: backup.tables.habit_completions,
         journal_entries: backup.tables.journal_entries,
       }
+      let rows = dropTombstones(all)
       const owners = backupOwners(backup).filter((o) => o !== userId)
       if (owners.length) {
-        if ((await claimedAccounts(tx)).includes(userId)) {
-          rows = rekeyRows(rows, (_table, oldId) => copiedId(userId, oldId))
+        const accounts = await claimedAccounts(tx)
+        if (accounts.includes(userId)) {
+          const local = await getMeta(LOCAL_KEY, tx)
+          const claimedLocal = local !== null && accounts[0] === userId && !accounts.includes(local)
+          if (owners.some((o) => !(claimedLocal && o === local))) {
+            rows = rekeyRows(rows, (_table, oldId) => copiedId(userId, oldId))
+          }
         } else {
           const known = await importedAccounts(tx)
           await setMeta(IMPORTED_KEY, JSON.stringify([...new Set([...known, ...owners])]), tx)
         }
       }
+      skipped += countRows(all) - countRows(rows)
       for (const table of SYNC_TABLES) {
         for (const src of table === 'profiles' ? backup.tables.profiles : rows[table]) {
           if (table === 'profiles') {

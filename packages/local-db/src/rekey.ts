@@ -48,3 +48,26 @@ export function rekeyRows(
   }
   return { habits, habit_completions, journal_entries }
 }
+
+/**
+ * The rows of a backup that an import may write: tombstones are dropped (a backup restores data, it
+ * never deletes or revives anything), and with them the completions of a habit the backup itself
+ * holds as a tombstone. The same rule `rekeyRows` applies; it additionally drops completions whose
+ * habit isn't in the backup at all, since their new id derives from the habit's new id.
+ *
+ * Pure: returns new arrays in the input order.
+ */
+export function dropTombstones(tables: RekeyTables): RekeyTables {
+  const deletedHabits = new Set(tables.habits.filter((h) => h.deleted_at).map((h) => h.id))
+  return {
+    habits: tables.habits.filter((h) => !h.deleted_at),
+    habit_completions: tables.habit_completions.filter(
+      (c) => !c.deleted_at && !deletedHabits.has(c.habit_id as string)),
+    journal_entries: tables.journal_entries.filter((j) => !j.deleted_at),
+  }
+}
+
+/** Total rows across the three tables (for counting what an import dropped). */
+export function countRows(tables: RekeyTables): number {
+  return tables.habits.length + tables.habit_completions.length + tables.journal_entries.length
+}
