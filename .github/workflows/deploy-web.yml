@@ -25,6 +25,8 @@ jobs:
     outputs:
       image: ${{ steps.meta.outputs.tags }}
       digest: ${{ steps.push.outputs.digest }}
+      image-selfhost: ${{ steps.meta-selfhost.outputs.tags }}
+      digest-selfhost: ${{ steps.push-selfhost.outputs.digest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -74,6 +76,34 @@ jobs:
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Same image, same Dockerfile, but built with NO Supabase build-args at all (not even empty
+      # ones), so it never bakes a stale/placeholder Supabase URL into the client bundle. This is the
+      # image docker-compose.selfhost.yml pulls: web login stays disabled, only /api/auth (Better
+      # Auth) and /api/sync serve requests. Tags get a "selfhost" / "selfhost-<version>" /
+      # "selfhost-sha-<hash>" naming so both variants can live in the same GHCR package.
+      - name: Extract self-host image metadata
+        id: meta-selfhost
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=selfhost-latest,enable={{is_default_branch}}
+            type=semver,pattern=selfhost-{{version}}
+            type=semver,pattern=selfhost-{{major}}.{{minor}}
+            type=sha,prefix=selfhost-sha-,format=short
+
+      - name: Build and push (self-host, no Supabase build-args)
+        id: push-selfhost
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta-selfhost.outputs.tags }}
+          labels: ${{ steps.meta-selfhost.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

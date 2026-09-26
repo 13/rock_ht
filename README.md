@@ -316,6 +316,27 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/sync/pull   #
 
 In the app: Settings → Sync → Self-hosted → your `PUBLIC_URL` → Create account. Plain `http://` LAN URLs work for testing (the Android emulator reaches the host at `http://10.0.2.2:<WEB_PORT>`); for anything reachable from the internet, put HTTPS in front (e.g. Caddy) and use the `https://` URL.
 
+> The `ghcr.io/13/rock_ht-web` package must be **public** (Package settings → Change visibility) or an anonymous `docker compose pull` will get a 401/denied. This is a one-time setting for whoever owns the GHCR package/repo.
+
+#### Upgrading
+
+`db/selfhost/init` only runs against a brand-new `pgdata` volume — an existing deployment's schema is *not* touched by pulling a new image. To move an existing self-host deployment to a newer release:
+
+1. Pull the checkout at the release tag you're upgrading to (`git fetch --tags && git checkout vX.Y.Z`), so the SQL below matches the image you're about to run.
+2. Set `ROCK_HT_VERSION` in `.env.selfhost` to that tag **without its leading `v`** (e.g. `v1.4.0` → `1.4.0`) — that's the tag suffix the self-host image is published under (`ghcr.io/13/rock_ht-web:selfhost-1.4.0`).
+3. Pull and restart the containers:
+   ```bash
+   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost pull
+   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
+   ```
+4. Apply `db/selfhost/init/02_sync.sql` (functions and triggers only — see below for why `01_schema.sql` isn't included here) against the running database, using the actual user/db from `.env.selfhost`/the compose file (`rock_ht`/`rock_ht` unless you changed them):
+   ```bash
+   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost exec -T db \
+     psql -U rock_ht -d rock_ht -v ON_ERROR_STOP=1 -1 < db/selfhost/init/02_sync.sql
+   ```
+
+`02_sync.sql` is idempotent (`create or replace function/trigger`, and `drop function if exists` before the one function whose signature changed) and safe to re-run against an already-upgraded database. `01_schema.sql` is **not** idempotent (plain `create table`/`create sequence`/`create index`, no `if not exists`) — it only ever runs once, against a fresh volume. A future schema change ships as a new, numbered upgrade script (e.g. `db/selfhost/upgrades/002_*.sql`) with its own instructions here, not as an edit to `01_schema.sql`.
+
 ---
 
 ## Deployment

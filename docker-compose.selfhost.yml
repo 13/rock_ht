@@ -23,7 +23,11 @@ services:
       retries: 10
 
   web:
-    image: ghcr.io/13/rock_ht-web:${ROCK_HT_VERSION:-latest}
+    # The self-host variant (built without NEXT_PUBLIC_SUPABASE_* — see .github/workflows/deploy-web.yml),
+    # not the Supabase-configured `:latest`/`:<version>` image. ROCK_HT_VERSION is the bit after
+    # "selfhost-": "latest" (default) or a released version without its leading "v" (e.g. "1.2.0" for
+    # tag v1.2.0), matching the tags docker/metadata-action produces for the selfhost image.
+    image: ghcr.io/13/rock_ht-web:selfhost-${ROCK_HT_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
