@@ -76,4 +76,64 @@ describe('local store + sync engine', () => {
     expect(await b.sync.readOutbox(10)).toEqual([])
     expect(server.size).toBe(2)
   })
+
+  describe('delete vs offline edit', () => {
+    /** A and B share a synced habit; then A tombstones it and B edits it, both offline. */
+    async function diverge(order: 'edit-then-delete' | 'delete-then-edit') {
+      const { remote, server } = fakeServer()
+      const a = await newStore()
+      const b = await newStore()
+      const h = await a.createHabit(U, { title: 'v0', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+      await runSync(a.sync, remote)
+      await runSync(b.sync, remote)
+      if (order === 'edit-then-delete') {
+        await b.updateHabit({ id: h.id, title: 'from B' })
+        await a.deleteHabit(h.id) // later clock: tombstone is newer
+      } else {
+        await a.deleteHabit(h.id)
+        await b.updateHabit({ id: h.id, title: 'from B' }) // later clock: edit is newer
+      }
+      const edit = (await b.sync.getRow('habits', h.id))!
+      const tombstone = (await a.sync.getRow('habits', h.id))!
+      return { remote, server, a, b, id: h.id, edit, tombstone }
+    }
+
+    for (const first of ['a', 'b'] as const) {
+      it(`tombstone newer: deleted on both (${first.toUpperCase()} syncs first)`, async () => {
+        const { remote, server, a, b, id, edit, tombstone } = await diverge('edit-then-delete')
+        const [x, y] = first === 'a' ? [a, b] : [b, a]
+        await runSync(x.sync, remote)
+        await runSync(y.sync, remote)
+        await runSync(x.sync, remote)
+        for (const s of [a, b]) {
+          expect(await s.getHabit(id)).toBeNull()
+          expect((await s.sync.getRow('habits', id))!.deleted_at).toBe(tombstone.deleted_at)
+        }
+        expect(server.get(`habits:${id}`)!.c.row.deleted_at).toBe(tombstone.deleted_at)
+
+        // An echo of B's older live edit (re-pushed or re-pulled) never revives the newer tombstone.
+        await remote.push([{ table: 'habits', row: edit }])
+        for (const s of [a, b]) {
+          await s.sync.applyRemote([{ table: 'habits', row: edit }], await s.sync.getCursor())
+          await runSync(s.sync, remote)
+          expect(await s.getHabit(id)).toBeNull()
+        }
+        expect(server.get(`habits:${id}`)!.c.row.deleted_at).toBe(tombstone.deleted_at)
+      })
+
+      it(`edit newer: alive with B's edit on both (${first.toUpperCase()} syncs first)`, async () => {
+        const { remote, server, a, b, id } = await diverge('delete-then-edit')
+        const [x, y] = first === 'a' ? [a, b] : [b, a]
+        await runSync(x.sync, remote)
+        await runSync(y.sync, remote)
+        await runSync(x.sync, remote)
+        for (const s of [a, b]) {
+          const habit = await s.getHabit(id)
+          expect(habit).not.toBeNull()
+          expect(habit!.title).toBe('from B')
+        }
+        expect(server.get(`habits:${id}`)!.c.row.deleted_at).toBeNull()
+      })
+    }
+  })
 })

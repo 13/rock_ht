@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { completionId, isNewer, type SyncChange, type SyncRow } from '@rock_ht/sync'
 import { addDaysToDate, today } from '@rock_ht/utils'
@@ -133,7 +133,7 @@ describe('LocalStore', () => {
     await s.ensureProfile(U)
     await s.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
 
-    await expect(s.claim('account-1', { pushLocalProfile: true })).resolves.toBeUndefined()
+    await (await s.claim('account-1', { pushLocalProfile: true })).completed
 
     expect(await s.listHabits('account-1')).toHaveLength(1)
     expect(await s.getProfile('account-1')).not.toBeNull()
@@ -406,10 +406,56 @@ describe('LocalStore claim', () => {
     await store.sync.applyRemote(completionRows(h.id, 450), null)
     // Let the first transaction (rewrite + profile/habits) and one completion chunk commit, then crash.
     failTransaction(transactions() + 3)
-    await expect(store.claim('account-1', { pushLocalProfile: true })).rejects.toThrow('crash')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { completed } = await store.claim('account-1', { pushLocalProfile: true })
+      await expect(completed).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
     const out = await store.sync.readOutbox(1000)
     expect(out).toHaveLength(452)
     expect(new Set(out.map((e) => e.change.row.id)).size).toBe(452)
+  })
+
+  it('switches identity and ownership atomically: a failed re-queue chunk still leaves the device on the account', async () => {
+    const { store, failTransaction, transactions } = await countingStore()
+    await store.ensureProfile(U)
+    const h = await store.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    await store.createJournal(U, { content: 'hi' })
+    await store.sync.applyRemote(completionRows(h.id, 450), null)
+    // The first transaction commits; the very first re-queue chunk fails.
+    failTransaction(transactions() + 2)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { completed } = await store.claim('account-1', { pushLocalProfile: true })
+      expect(await store.getMeta('account_user_id')).toBe('account-1')
+      await completed
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('claim'), expect.any(Error))
+    } finally {
+      warn.mockRestore()
+    }
+    expect(await store.listHabits('account-1')).toHaveLength(1)
+    expect(await store.listHabits(U)).toHaveLength(0)
+    expect(await store.listCompletions('account-1')).toHaveLength(450)
+    expect(await store.listJournal('account-1')).toHaveLength(1)
+    expect(await store.getProfile('account-1')).not.toBeNull()
+    expect(await store.getProfile(U)).toBeNull()
+    // The next push resumes the re-queue before reading.
+    const out = await store.sync.readOutbox(1000)
+    expect(out).toHaveLength(453)
+    expect(new Set(out.map((e) => e.change.row.id)).size).toBe(453)
+  })
+
+  it('leaves identity and rows untouched when the first transaction fails', async () => {
+    const { store, failTransaction, transactions } = await countingStore()
+    await store.ensureProfile(U)
+    await store.createHabit(U, { title: 'A', icon: '✨', color: '#fff', frequency: { type: 'daily' } })
+    failTransaction(transactions() + 1)
+    await expect(store.claim('account-1', { pushLocalProfile: true })).rejects.toThrow('crash')
+    expect(await store.getMeta('account_user_id')).toBeNull()
+    expect(await store.listHabits(U)).toHaveLength(1)
   })
 })
 

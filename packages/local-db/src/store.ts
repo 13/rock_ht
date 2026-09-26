@@ -27,6 +27,8 @@ export interface LocalStoreDeps {
 export type LocalStore = ReturnType<typeof createLocalStore>
 
 const CURSOR_KEY = 'sync_cursor'
+/** The signed-in account this device's rows belong to (see `claim`; read by the mobile app's `resolveUserId`). */
+const ACCOUNT_KEY = 'account_user_id'
 /** Progress of `claim`'s chunked re-queue: `{ table, after: rowid }`, or null when none is pending. */
 const CLAIM_KEY = 'claim_progress'
 /** Tables `claim` re-queues in chunks after its first transaction (they have no dependents). */
@@ -404,8 +406,15 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * Completions and journal entries — the bulk — are then re-queued `chunkSize` rows per transaction
    * (`finishClaim`), with progress stored in `meta` in the same transaction as each chunk. If the app
    * dies midway, `sync.readOutbox` finishes the re-queue before anything is pushed.
+   *
+   * Contract: the first transaction also writes meta `account_user_id = toUserId` (read by the mobile
+   * app's `resolveUserId`), so identity and row ownership switch atomically. If it fails, `claim`
+   * rejects and nothing changed. Once `claim` resolves, the device belongs to `toUserId`; re-queueing
+   * may still be in progress and is resumed automatically (by `sync.readOutbox`). The returned
+   * `completed` settles when this call's re-queue attempt ends; it never rejects — a failed chunk is
+   * logged with `console.warn` and left for `readOutbox` to resume.
    */
-  async function claim(toUserId: string, opts: { pushLocalProfile: boolean }) {
+  async function claim(toUserId: string, opts: { pushLocalProfile: boolean }): Promise<{ completed: Promise<void> }> {
     await driver.transaction(async (tx) => {
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?`, [toUserId])
@@ -425,8 +434,12 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       }
       const start: ClaimProgress = { table: CLAIM_CHUNKED[0], after: 0 }
       await setMeta(CLAIM_KEY, JSON.stringify(start), tx)
+      await setMeta(ACCOUNT_KEY, toUserId, tx)
     })
-    await finishClaim()
+    const completed = finishClaim().catch((e: unknown) => {
+      console.warn('claim: re-queue interrupted; sync.readOutbox will resume it', e)
+    })
+    return { completed }
   }
 
   /** Re-queue the rest of a pending `claim`, one chunk per transaction. No-op when none is pending. */
