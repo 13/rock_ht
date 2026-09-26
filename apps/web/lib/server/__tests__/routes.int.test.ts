@@ -4,6 +4,9 @@
 // Run: npm run test:int --workspace=apps/web
 import { afterAll, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
+// @rock_ht/local-db and better-sqlite3 resolve through the root workspace install (node_modules is
+// hoisted), deliberately not as apps/web devDependencies: the web image's `npm ci` would then have to
+// compile better-sqlite3 natively on alpine (no Python), which fails the Docker build.
 import Database from 'better-sqlite3'
 import { completionId, createHttpRemote, runSync, SyncAuthError, type SyncChange } from '@rock_ht/sync'
 import { createLocalStore, migrate, type SqlDriver, type SqlParam } from '@rock_ht/local-db'
