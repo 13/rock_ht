@@ -11,9 +11,17 @@ export type AppUpdateState =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "up-to-date"; checkedAt: Date }
+  | { kind: "no-releases"; checkedAt: Date }
   | { kind: "available"; version: string; sizeBytes: number; notes: string | null; releaseUrl: string }
   | { kind: "downloading"; written: number; total: number }
   | { kind: "ready"; version: string; verified: boolean }
+  | {
+      kind: "newer-build-installed";
+      version: string;
+      releaseCode: number;
+      installedCode: number;
+      releaseUrl: string;
+    }
   | { kind: "error"; message: string; releaseUrl?: string };
 
 type AvailableState = Extract<AppUpdateState, { kind: "available" }>;
@@ -61,6 +69,18 @@ export function useAppUpdate() {
     switch (result.kind) {
       case "up-to-date":
         setState({ kind: "up-to-date", checkedAt: new Date() });
+        return;
+      case "no-releases":
+        setState({ kind: "no-releases", checkedAt: new Date() });
+        return;
+      case "newer-build-installed":
+        setState({
+          kind: "newer-build-installed",
+          version: result.version,
+          releaseCode: result.releaseCode,
+          installedCode: result.installedCode,
+          releaseUrl: result.releaseUrl,
+        });
         return;
       case "available": {
         const available: AvailableState = {

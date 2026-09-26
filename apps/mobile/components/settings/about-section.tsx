@@ -80,6 +80,14 @@ function formatMb(bytes: number): string {
 }
 
 const NOTES_PREVIEW_CHARS = 300;
+const GITHUB_URL_PREFIX = "https://github.com/";
+
+// A release's html_url comes from the GitHub API response, not from anything
+// this app controls. Only ever hand Linking a URL that actually points at
+// github.com; otherwise hide the link instead of opening it.
+function isSafeReleaseUrl(url: string | null | undefined): url is string {
+  return typeof url === "string" && url.startsWith(GITHUB_URL_PREFIX);
+}
 
 function withHaptic(fn: () => void) {
   return () => {
@@ -196,6 +204,42 @@ function UpdateRow() {
             <Ionicons name="refresh" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         );
+      case "no-releases":
+        return (
+          <TouchableOpacity
+            style={rowStyle}
+            activeOpacity={0.7}
+            onPress={withHaptic(() => void check())}
+            accessibilityHint="Checks for updates again"
+          >
+            <UpdateIcon name="cloud-offline-outline" color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[titleStyle, { color: colors.textSecondary }]}>No releases published yet</Text>
+              <Text style={subStyle}>Checked {format(s.checkedAt, "HH:mm")}</Text>
+            </View>
+            <Ionicons name="refresh" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        );
+      case "newer-build-installed":
+        return (
+          <View style={{ paddingVertical: 13, paddingHorizontal: 16, gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <UpdateIcon name="information-circle-outline" />
+              <Text style={[titleStyle, { flex: 1 }]}>
+                This build ({s.installedCode}) is newer than release {s.version} ({s.releaseCode}) — Android
+                won't downgrade.
+              </Text>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginLeft: 44 }}>
+              Uninstall to switch to the release.
+            </Text>
+            {isSafeReleaseUrl(s.releaseUrl) ? (
+              <View style={{ marginLeft: 40 }}>
+                <PillButton label="Open release page" variant="text" onPress={openRelease(s.releaseUrl)} />
+              </View>
+            ) : null}
+          </View>
+        );
       case "available": {
         const notes = s.notes?.trim();
         const preview =
@@ -216,9 +260,11 @@ function UpdateRow() {
                 {preview}
               </Text>
             ) : null}
-            <View style={{ marginLeft: 40 }}>
-              <PillButton label="Release notes" variant="text" onPress={openRelease(s.releaseUrl)} />
-            </View>
+            {isSafeReleaseUrl(s.releaseUrl) ? (
+              <View style={{ marginLeft: 40 }}>
+                <PillButton label="Release notes" variant="text" onPress={openRelease(s.releaseUrl)} />
+              </View>
+            ) : null}
           </View>
         );
       }
@@ -252,19 +298,24 @@ function UpdateRow() {
       }
       case "ready":
         return (
-          <View style={rowStyle}>
-            <UpdateIcon name="checkmark-done-outline" />
-            <View style={{ flex: 1 }}>
-              <Text style={titleStyle}>Version {s.version} downloaded</Text>
-              {s.verified ? (
-                <Text style={subStyle}>Verified ✓</Text>
-              ) : (
-                <Text style={[subStyle, { color: colors.warning }]}>
-                  Not verified — no checksum published
-                </Text>
-              )}
+          <View style={{ paddingVertical: 13, paddingHorizontal: 16, gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <UpdateIcon name="checkmark-done-outline" />
+              <View style={{ flex: 1 }}>
+                <Text style={titleStyle}>Version {s.version} downloaded</Text>
+                {s.verified ? (
+                  <Text style={subStyle}>Verified ✓</Text>
+                ) : (
+                  <Text style={[subStyle, { color: colors.warning }]}>
+                    Not verified — no checksum published
+                  </Text>
+                )}
+              </View>
+              <PillButton label="Install" onPress={() => void install()} />
             </View>
-            <PillButton label="Install" onPress={() => void install()} />
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginLeft: 44 }}>
+              If Android says &quot;App not installed&quot;, this build can't be updated in place.
+            </Text>
           </View>
         );
       case "error":
@@ -281,7 +332,7 @@ function UpdateRow() {
             </View>
             <View style={{ flexDirection: "row", gap: 16, marginLeft: 40 }}>
               <PillButton label="Try again" variant="text" onPress={() => void check()} />
-              {s.releaseUrl ? (
+              {isSafeReleaseUrl(s.releaseUrl) ? (
                 <PillButton
                   label="Open release page"
                   variant="text"
@@ -311,6 +362,10 @@ export function AboutSection() {
     : "Development build";
 
   const shaWithoutDirty = info.gitSha?.replace(/\+dirty$/, "");
+  // Debug builds run through Metro without a real bundled version, and
+  // "0.0.0-dev" is the unversioned build produced by ad hoc dev tooling —
+  // neither has a meaningful release to check against.
+  const updatesUnavailable = info.channel === "debug" || info.versionName === "0.0.0-dev";
 
   return (
     <>
@@ -376,7 +431,15 @@ export function AboutSection() {
         {Platform.OS === "android" && (
           <>
             <AboutDivider />
-            <UpdateRow />
+            {updatesUnavailable ? (
+              <View style={{ paddingVertical: 13, paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  Updates are available in release builds only
+                </Text>
+              </View>
+            ) : (
+              <UpdateRow />
+            )}
           </>
         )}
       </View>
