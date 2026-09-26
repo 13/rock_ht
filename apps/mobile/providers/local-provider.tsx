@@ -31,6 +31,18 @@ export function LocalProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  /**
+   * Re-resolve the identity after sign-in/disconnect. Unlike the initial load, a failure here is
+   * rethrown to the caller (shown inline) and keeps the current tree instead of the error screen:
+   * the store is open and still usable under the previous id.
+   */
+  const refreshUserId = useCallback(async () => {
+    const store = await openLocalStore();
+    const userId = await resolveUserId(store);
+    await store.ensureProfile(userId);
+    setValue((cur) => (cur && cur.store === store && cur.userId === userId ? cur : { store, userId }));
+  }, []);
+
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: "#0a0a0f", alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
@@ -46,7 +58,7 @@ export function LocalProvider({ children }: { children: ReactNode }) {
     );
   }
   if (!value) return null;
-  return <Context.Provider value={{ ...value, refreshUserId: load }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ ...value, refreshUserId }}>{children}</Context.Provider>;
 }
 
 export function useLocal() {
