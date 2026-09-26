@@ -213,6 +213,7 @@ export default function SyncSettingsScreen() {
     setBusy("connect");
     try {
       const accountId = await connectSync(store, config, { mode, email, password, name });
+      setSaved(config);
       await refreshUserId();
       await refreshSyncState();
       await syncNow();
@@ -336,12 +337,25 @@ export default function SyncSettingsScreen() {
               <Segmented value={kind} onChange={(k) => { setKind(k); setError(null); }} />
 
               {kind === "off" ? (
-                <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", paddingHorizontal: 4 }}>
-                  <Ionicons name="phone-portrait-outline" size={16} color={colors.textMuted} style={{ marginTop: 1 }} />
-                  <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
-                    Sync is off. Everything stays on this device; use Settings → Export data for backups.
-                  </Text>
-                </View>
+                <>
+                  <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", paddingHorizontal: 4 }}>
+                    <Ionicons name="phone-portrait-outline" size={16} color={colors.textMuted} style={{ marginTop: 1 }} />
+                    <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
+                      Sync is off. Everything stays on this device; use Settings → Export data for backups.
+                    </Text>
+                  </View>
+                  {saved && saved.kind !== "off" ? (
+                    <>
+                      {errorBox}
+                      <Button
+                        label="Turn sync off"
+                        variant="danger"
+                        onPress={disconnect}
+                        busy={busy === "disconnect"}
+                      />
+                    </>
+                  ) : null}
+                </>
               ) : (
                 <View
                   style={{

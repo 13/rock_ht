@@ -41,4 +41,19 @@ describe('createHttpRemote', () => {
     const r = createHttpRemote({ baseUrl: 'https://x.test', fetch, getHeaders: async () => ({}) })
     await expect(r.pull(null, 10)).rejects.toThrow('401')
   })
+
+  it('rejects with a timeout error when the request never resolves', async () => {
+    vi.useFakeTimers()
+    try {
+      // Never resolves and ignores the abort signal, like a stalled connection or a test
+      // double that doesn't implement AbortController support.
+      const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise<Response>(() => {}))
+      const r = createHttpRemote({ baseUrl: 'https://x.test', fetch, getHeaders: async () => ({}) })
+      const pending = expect(r.pull(null, 10)).rejects.toThrow(/timed? ?out/i)
+      await vi.advanceTimersByTimeAsync(20_000)
+      await pending
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

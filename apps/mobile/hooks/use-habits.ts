@@ -6,6 +6,7 @@ import {
   getNotificationPermissionStatus,
 } from "@/lib/notifications";
 import { getRemindersEnabled } from "@/lib/reminder-settings";
+import { runReminderOp } from "@/hooks/use-reminders";
 import { syncNow } from "@/lib/sync/service";
 import type { LocalStore } from "@rock_ht/local-db";
 import type {
@@ -20,15 +21,21 @@ export const HABITS_KEY = ["habits"] as const;
 // back the already-applied optimistic UI, so every call here is best-effort.
 async function syncReminder(habit: HabitWithFrequency, store: LocalStore): Promise<void> {
   try {
-    // Both the Settings switch and the OS permission must allow reminders
-    const enabled =
-      (await getRemindersEnabled(store)) &&
-      (await getNotificationPermissionStatus()) === "granted";
-    if (enabled) {
-      await scheduleHabitReminder(habit);
-    } else {
-      await cancelHabitReminder(habit.id);
-    }
+    // Routed through the same queue as rebuildRemindersFromStore: both read the OS's
+    // scheduled-notification list before writing to it, so running one of each concurrently
+    // (e.g. a background sync pull rebuilding while a habit edit is saved here) could
+    // otherwise duplicate this habit's reminder.
+    await runReminderOp(async () => {
+      // Both the Settings switch and the OS permission must allow reminders
+      const enabled =
+        (await getRemindersEnabled(store)) &&
+        (await getNotificationPermissionStatus()) === "granted";
+      if (enabled) {
+        await scheduleHabitReminder(habit);
+      } else {
+        await cancelHabitReminder(habit.id);
+      }
+    });
   } catch (e) {
     console.warn("[reminders] failed to sync reminder for habit", habit.id, e);
   }
@@ -36,7 +43,7 @@ async function syncReminder(habit: HabitWithFrequency, store: LocalStore): Promi
 
 async function cancelReminderSafely(id: string): Promise<void> {
   try {
-    await cancelHabitReminder(id);
+    await runReminderOp(() => cancelHabitReminder(id));
   } catch (e) {
     console.warn("[reminders] failed to cancel reminder for habit", id, e);
   }

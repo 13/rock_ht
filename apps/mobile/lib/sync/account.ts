@@ -1,6 +1,6 @@
 import type { LocalStore } from "@rock_ht/local-db";
 import { loadSyncConfig, saveSyncConfig, type SyncConfig } from "./config";
-import { createBackend } from "./remote-factory";
+import { createBackend, type SyncBackend } from "./remote-factory";
 import { resetSyncState } from "./service";
 
 /** Turns fetch's bare "Network request failed" into something a user can act on. */
@@ -24,10 +24,12 @@ export async function connectSync(
   config: SyncConfig,
   creds: { mode: "signin" | "signup"; email: string; password: string; name: string },
 ): Promise<string> {
+  let backend: SyncBackend;
   let accountId: string;
   try {
-    const backend = await createBackend(config);
-    if (!backend) throw new Error("Choose a sync server first.");
+    const b = await createBackend(config);
+    if (!b) throw new Error("Choose a sync server first.");
+    backend = b;
     accountId =
       creds.mode === "signup"
         ? await backend.signUp(creds.email.trim(), creds.password, creds.name.trim())
@@ -35,11 +37,22 @@ export async function connectSync(
   } catch (e) {
     throw friendly(e, config);
   }
-  await saveSyncConfig(config);
-  // Early-returns in the store when this device's rows already belong to accountId.
-  const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" });
-  await completed;
-  return accountId;
+  try {
+    await saveSyncConfig(config);
+    // Early-returns in the store when this device's rows already belong to accountId.
+    const { completed } = await store.claim(accountId, { pushLocalProfile: creds.mode === "signup" });
+    await completed;
+    return accountId;
+  } catch (e) {
+    // The sign-in/up above already stored a session cookie for accountId. If anything after
+    // that fails, the connection didn't go through, so leaving that cookie in place would let a
+    // later, unrelated action (or a retry against a different server) silently run under this
+    // half-connected account. Sign out locally — best effort, and works offline, since
+    // @better-auth/expo clears its SecureStore cookie before it even attempts the network
+    // request for /sign-out — before rethrowing.
+    await backend.signOut().catch(() => {});
+    throw e;
+  }
 }
 
 /**

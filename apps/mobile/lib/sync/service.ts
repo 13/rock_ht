@@ -14,6 +14,11 @@ export type SyncState = {
 const LAST_SYNCED_KEY = "last_synced_at";
 
 let inFlight: Promise<SyncReport | null> | null = null;
+// Set when syncNow() is called while a run is already in flight: that caller's config/state
+// snapshot may be stale (e.g. it fired right after the user picked a new server), so instead of
+// starting a second overlapping run we coalesce every such call into exactly one extra run right
+// after the current one finishes.
+let rerunRequested = false;
 let state: SyncState = { off: true, syncing: false, error: null, at: null };
 let loadedAt = false;
 const listeners = new Set<(s: SyncState) => void>();
@@ -74,34 +79,52 @@ function message(e: unknown): string {
 }
 
 /**
- * One push-then-pull pass. Single-flight: concurrent callers share one run. Resolves `null` without
- * touching the network when sync is Off or no account is signed in; never rejects (errors land in
- * the subscribed state).
+ * One push-then-pull pass. Single-flight: concurrent callers share one run, and a call that
+ * arrives while a run is in flight queues exactly one more run afterward (see `rerunRequested`)
+ * instead of joining or restarting it. Resolves `null` without touching the network when sync is
+ * Off or no account is signed in; never rejects (errors land in the subscribed state).
  */
 export function syncNow(): Promise<SyncReport | null> {
-  inFlight ??= (async () => {
-    try {
-      const off = await isOff();
-      if (off !== state.off) emit({ off });
-      if (off) return null;
-      const config = await loadSyncConfig();
-      const store = await openLocalStore();
-      emit({ syncing: true, error: null });
-      const backend = await createBackend(config);
-      if (!backend) return null;
-      const report = await runSync(store.sync, backend.remote);
+  if (inFlight) {
+    rerunRequested = true;
+    return inFlight;
+  }
+  inFlight = runOnce();
+  return inFlight;
+}
+
+async function runOnce(): Promise<SyncReport | null> {
+  try {
+    const off = await isOff();
+    if (off !== state.off) emit({ off });
+    if (off) return null;
+    const config = await loadSyncConfig();
+    const store = await openLocalStore();
+    emit({ syncing: true, error: null });
+    const backend = await createBackend(config);
+    if (!backend) return null;
+    // Captured so a disconnect or account switch mid-run doesn't attribute this run's
+    // "last synced" timestamp to whichever account happens to be current when it finishes.
+    const accountAtStart = await store.getMeta("account_user_id");
+    const report = await runSync(store.sync, backend.remote);
+    if ((await store.getMeta("account_user_id")) === accountAtStart) {
       const at = new Date().toISOString();
       await store.setMeta(LAST_SYNCED_KEY, at);
       emit({ at, error: null });
-      if (report.pulled > 0) pulledListeners.forEach((l) => l(report));
-      return report;
-    } catch (error) {
-      emit({ error: message(error) });
-      return null;
-    } finally {
-      emit({ syncing: false });
-      inFlight = null;
+    } else {
+      emit({ error: null });
     }
-  })();
-  return inFlight;
+    if (report.pulled > 0) pulledListeners.forEach((l) => l(report));
+    return report;
+  } catch (error) {
+    emit({ error: message(error) });
+    return null;
+  } finally {
+    emit({ syncing: false });
+    inFlight = null;
+    if (rerunRequested) {
+      rerunRequested = false;
+      void syncNow();
+    }
+  }
 }
