@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { TimezoneSync } from "@/components/layout/timezone-sync";
@@ -11,6 +12,9 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // The web app needs Supabase; the self-hosted image only serves the landing page and the APIs.
+  if (!isSupabaseConfigured()) redirect("/");
+
   const supabase = await createClient();
   const {
     data: { user },

@@ -1,11 +1,15 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { isSupabaseConfigured } from '@/lib/supabase/config'
 
 export default async function RootPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/dashboard')
+  // Without Supabase (self-hosted image) there is no web session: always show the landing page.
+  if (isSupabaseConfigured()) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) redirect('/dashboard')
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">

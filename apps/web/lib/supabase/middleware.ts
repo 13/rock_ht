@@ -1,8 +1,12 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import type { Database } from "@rock_ht/types";
+import { isSupabaseConfigured } from "./config";
 
 export async function updateSession(request: NextRequest) {
+  // No Supabase project: no web session to refresh. The pages themselves handle the missing config.
+  if (!isSupabaseConfigured()) return NextResponse.next();
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

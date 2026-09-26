@@ -1,8 +1,11 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@rock_ht/types";
+import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "./config";
 
+/** Throws `Supabase not configured` when the build has no Supabase project (see ./config). */
 export async function createClient() {
+  if (!isSupabaseConfigured()) throw new Error(SUPABASE_NOT_CONFIGURED);
   const cookieStore = await cookies();
 
   return createServerClient<Database>(

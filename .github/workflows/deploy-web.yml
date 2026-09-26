@@ -15,29 +15,8 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/rock_ht-web
 
 jobs:
-  check-secrets:
-    name: Check deploy secrets
-    runs-on: ubuntu-latest
-    permissions: {}
-    outputs:
-      ready: ${{ steps.check.outputs.ready }}
-    steps:
-      - id: check
-        env:
-          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        run: |
-          if [ -n "$URL" ] && [ -n "$KEY" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Deploy web skipped::Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY repository secrets to build and push the image."
-          fi
-
   build-and-push:
     name: Build & push Docker image
-    needs: check-secrets
-    if: needs.check-secrets.outputs.ready == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,6 +28,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Without the Supabase secrets the image is still built: it is the self-hosted sync server
+      # (docker-compose.selfhost.yml), with web login disabled.
+      - name: Note missing Supabase config
+        env:
+          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "::notice title=Web image without Supabase::NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are not set. The image serves the marketing pages, /api/auth and /api/sync (self-host); web login is disabled."
+          fi
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3

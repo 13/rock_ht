@@ -304,6 +304,18 @@ Services started:
 
 > Supabase is not included in Compose because it is best run via the Supabase CLI locally or consumed as a cloud service in staging/production. See [Supabase setup](#supabase-setup).
 
+### Self-hosted sync server (no Supabase)
+
+`docker-compose.selfhost.yml` runs a sync server for the mobile app: Postgres 17 (schema from `db/selfhost/init`, loaded when the volume is first created) and the `ghcr.io/13/rock_ht-web` image, which serves Better Auth at `/api/auth` and sync at `/api/sync`. The image is built without Supabase config, so the web UI only shows the landing page and the login pages say "This server has no web login configured".
+
+```bash
+cp .env.selfhost.example .env.selfhost   # set POSTGRES_PASSWORD, BETTER_AUTH_SECRET, PUBLIC_URL (WEB_PORT, default 3000)
+docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/sync/pull   # 401 = up, not signed in
+```
+
+In the app: Settings → Sync → Self-hosted → your `PUBLIC_URL` → Create account. Plain `http://` LAN URLs work for testing (the Android emulator reaches the host at `http://10.0.2.2:<WEB_PORT>`); for anything reachable from the internet, put HTTPS in front (e.g. Caddy) and use the `https://` URL.
+
 ---
 
 ## Deployment
