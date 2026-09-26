@@ -8,6 +8,7 @@
     "ios": "NODE_PATH=./node_modules expo run:ios",
     "type-check": "tsc --noEmit",
     "typegen": "NODE_PATH=./node_modules node scripts/typegen.js",
+    "test": "vitest run",
     "clean": "rm -rf .expo"
   },
   "dependencies": {
@@ -62,6 +63,9 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "^19.1.1",
-    "typescript": "^5.7.2"
+    "@types/react-test-renderer": "^19.3.0",
+    "react-test-renderer": "19.2.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }

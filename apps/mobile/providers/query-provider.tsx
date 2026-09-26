@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocal } from "./local-provider";
 
 function newQueryClient(): QueryClient {
@@ -19,23 +19,30 @@ function newQueryClient(): QueryClient {
 }
 
 /**
- * One cache per local identity: query keys don't carry the user id, so when sign-in (claim) or
- * disconnect switches `userId`, a fresh client guarantees no screen renders the previous user's
- * cached habits, completions or streaks — not even for the frame before a refetch.
+ * One cache for the app's lifetime, reset whenever the local identity changes. Query keys don't
+ * carry the user id, so when sign-in (claim) or disconnect switches `userId`, every cached query is
+ * dropped and the mounted ones refetch under the new id.
  *
- * Kept in a ref rather than `useMemo`: `useMemo` is only a cache React is allowed to discard and
- * recompute at will (e.g. under memory pressure), which would silently hand out a second client
- * for the same identity. A ref rebuilt during render when `userId` changes guarantees exactly one
- * `QueryClient` per identity, no more.
+ * Not a fresh `QueryClient` per identity: `useQuery`/`useMutation` bind their observer to the client
+ * of their *first* render, so screens that stay mounted across the switch (the tabs under Sync
+ * settings) would keep reading — and never again be invalidated on — the discarded client, showing
+ * the pre-sign-in cache until the app restarts.
+ *
+ * `resetQueries` runs in a passive effect: React runs children's effects before their parent's, so by
+ * then every mounted `useQuery` has already applied its new options (a `queryFn` bound to the new
+ * `userId`). The single render in between shows the same rows under the old id — both identity
+ * switches re-own this device's rows rather than swapping them out.
  */
 export function QueryProvider({ children }: { children: ReactNode }) {
   const { userId } = useLocal();
-  const clientRef = useRef<{ userId: string; client: QueryClient } | null>(null);
-  if (clientRef.current === null || clientRef.current.userId !== userId) {
-    clientRef.current = { userId, client: newQueryClient() };
-  }
+  const [client] = useState(newQueryClient);
+  const identity = useRef(userId);
 
-  return (
-    <QueryClientProvider client={clientRef.current.client}>{children}</QueryClientProvider>
-  );
+  useEffect(() => {
+    if (identity.current === userId) return;
+    identity.current = userId;
+    void client.resetQueries();
+  }, [client, userId]);
+
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
