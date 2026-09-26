@@ -17,6 +17,10 @@ import { getBuildInfo } from "./build-info";
 // lets tests/dev point the update check at a local fixture server instead of
 // the real GitHub API.
 const API_BASE = process.env.EXPO_PUBLIC_UPDATE_API_BASE ?? "https://api.github.com";
+// Same override, read again as a plain presence check: it's a signal that
+// this is a test build pointed at a local fixture server, which is also the
+// only situation where downloadUpdate is allowed to fetch a non-https URL.
+const UPDATE_API_OVERRIDDEN = process.env.EXPO_PUBLIC_UPDATE_API_BASE != null;
 
 const CHECK_TIMEOUT_MS = 10_000;
 const UPDATES_DIR_NAME = "updates/";
@@ -43,10 +47,15 @@ async function computeSha256(fileUri: string): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
-export type CheckResult = UpdateEvaluation | { kind: "network-error"; message: string };
+export type CheckResult =
+  | UpdateEvaluation
+  | { kind: "network-error"; message: string }
+  // The repo has no GitHub releases yet: expected during early development,
+  // not a failure, so the UI shows it as a neutral row rather than an error.
+  | { kind: "no-releases" };
 
 export async function checkForUpdate(): Promise<CheckResult> {
-  const { updateRepo, versionName } = getBuildInfo();
+  const { updateRepo, versionName, versionCodeNumber } = getBuildInfo();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
 
@@ -62,14 +71,14 @@ export async function checkForUpdate(): Promise<CheckResult> {
     });
 
     if (response.status === 404) {
-      return { kind: "network-error", message: "No releases published yet" };
+      return { kind: "no-releases" };
     }
     if (!response.ok) {
       return { kind: "network-error", message: `GitHub returned status ${response.status}` };
     }
 
     const json = (await response.json()) as GitHubRelease;
-    return evaluateRelease(versionName, json);
+    return evaluateRelease(versionName, json, versionCodeNumber);
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { kind: "network-error", message: "Request timed out" };
@@ -103,6 +112,13 @@ export function downloadUpdate(
 
   const promise = (async (): Promise<DownloadResult> => {
     try {
+      // Refuse a non-https download URL — a compromised or malformed API
+      // response shouldn't get to hand the app a plaintext download — unless
+      // this is a test build deliberately pointed at a local fixture server.
+      if (!/^https:/i.test(asset.browser_download_url) && !UPDATE_API_OVERRIDDEN) {
+        return { kind: "failed", message: "Insecure download URL" };
+      }
+
       // Race guard: cancel() called before the download task even exists.
       if (cancelled) {
         return { kind: "failed", message: "Cancelled" };
