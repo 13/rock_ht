@@ -7,6 +7,7 @@ import {
   parseVersion,
   pickApkAsset,
   sha256FromDigest,
+  versionCodeFromAssetName,
   type GitHubRelease,
 } from "../app-update";
 
@@ -70,6 +71,25 @@ describe("pickApkAsset / sha256FromDigest", () => {
   });
 });
 
+describe("versionCodeFromAssetName", () => {
+  it("parses the versionCode out of the new asset name shape", () => {
+    expect(versionCodeFromAssetName("rock_ht-0.3.0-49-abc1234-release.apk")).toBe(49);
+  });
+  it("parses a dirty build's versionCode", () => {
+    expect(versionCodeFromAssetName("rock_ht-0.3.0-49-abc1234+dirty-release.apk")).toBe(49);
+  });
+  it("is case-insensitive", () => {
+    expect(versionCodeFromAssetName("rock_ht-0.3.0-49-ABC1234-RELEASE.APK")).toBe(49);
+  });
+  it("returns null when there is no versionCode (old naming)", () => {
+    expect(versionCodeFromAssetName("rock_ht-0.3.0-abc1234-release.apk")).toBeNull();
+  });
+  it("returns null for unrelated names", () => {
+    expect(versionCodeFromAssetName("rock_ht-0.3.0-49-abc1234-mapping.txt")).toBeNull();
+    expect(versionCodeFromAssetName("")).toBeNull();
+  });
+});
+
 describe("bytesToHex", () => {
   it("hex-encodes bytes with zero padding", () => {
     expect(bytesToHex(new Uint8Array([0x00, 0x0f, 0xff]))).toBe("000fff");
@@ -116,5 +136,38 @@ describe("evaluateRelease", () => {
   it("refuses to compare unreadable versions", () => {
     expect(evaluateRelease("dev", release()).kind).toBe("unreadable-version");
     expect(evaluateRelease("0.2.0", release({ tag_name: "nightly" })).kind).toBe("unreadable-version");
+  });
+
+  const releaseWithCode = (code: number, over: Partial<GitHubRelease> = {}): GitHubRelease =>
+    release({
+      assets: [
+        { name: `rock_ht-0.3.0-${code}-abc1234-release.apk`, size: 42, browser_download_url: "https://x/a.apk" },
+      ],
+      ...over,
+    });
+
+  it("reports newer-build-installed when the release's versionCode is lower than the installed one", () => {
+    const r = evaluateRelease("0.2.0", releaseWithCode(10), 20);
+    expect(r).toEqual({
+      kind: "newer-build-installed",
+      version: "0.3.0",
+      releaseCode: 10,
+      installedCode: 20,
+      releaseUrl: release().html_url,
+    });
+  });
+
+  it("still offers the update when the release's versionCode is equal or greater", () => {
+    expect(evaluateRelease("0.2.0", releaseWithCode(20), 20).kind).toBe("available");
+    expect(evaluateRelease("0.2.0", releaseWithCode(30), 20).kind).toBe("available");
+  });
+
+  it("offers the update when the installed versionCode is unknown", () => {
+    expect(evaluateRelease("0.2.0", releaseWithCode(10)).kind).toBe("available");
+    expect(evaluateRelease("0.2.0", releaseWithCode(10), null).kind).toBe("available");
+  });
+
+  it("offers the update when the release asset has no parseable versionCode", () => {
+    expect(evaluateRelease("0.2.0", release(), 20).kind).toBe("available");
   });
 });

@@ -24,7 +24,14 @@ export type UpdateEvaluation =
   | { kind: "up-to-date" }
   | { kind: "available"; version: string; asset: ReleaseAsset; releaseUrl: string; notes: string | null }
   | { kind: "no-apk"; releaseUrl: string }
-  | { kind: "unreadable-version"; releaseUrl: string | null };
+  | { kind: "unreadable-version"; releaseUrl: string | null }
+  | {
+      kind: "newer-build-installed";
+      version: string;
+      releaseCode: number;
+      installedCode: number;
+      releaseUrl: string;
+    };
 
 export function parseVersion(input: string): Version | null {
   const regex = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
@@ -130,6 +137,20 @@ export function pickApkAsset(release: GitHubRelease): ReleaseAsset | null {
   return release.assets.find((a) => a.name.toLowerCase().endsWith(".apk")) ?? null;
 }
 
+// Matches the `-<versionCode>-<sha>[+dirty]-release.apk` suffix that
+// scripts/build-apk.sh names its output with. Asset names built by the old
+// naming scheme (no versionCode segment) don't match, and callers treat that
+// as "unknown" rather than as versionCode 0.
+const VERSION_CODE_RE = /-(\d+)-[0-9a-f]{7,40}(?:\+dirty)?-release\.apk$/i;
+
+export function versionCodeFromAssetName(name: string): number | null {
+  const match = name.match(VERSION_CODE_RE);
+  if (!match || !match[1]) {
+    return null;
+  }
+  return Number(match[1]);
+}
+
 export function sha256FromDigest(digest: string | null | undefined): string | null {
   if (!digest) {
     return null;
@@ -179,7 +200,11 @@ export function bytesToHex(bytes: Uint8Array): string {
   return hex;
 }
 
-export function evaluateRelease(installedVersionName: string, release: GitHubRelease): UpdateEvaluation {
+export function evaluateRelease(
+  installedVersionName: string,
+  release: GitHubRelease,
+  installedVersionCode?: number | null,
+): UpdateEvaluation {
   // Step 1: Parse both versions
   const installedVersion = parseVersion(installedVersionName);
   const releaseVersion = parseVersion(release.tag_name);
@@ -203,8 +228,22 @@ export function evaluateRelease(installedVersionName: string, release: GitHubRel
     return { kind: "no-apk", releaseUrl: release.html_url };
   }
 
-  // Step 4: Return available
+  // Step 4: Android refuses to install an APK whose versionCode is lower
+  // than the installed one, and ACTION_VIEW surfaces no error when that
+  // happens — so when both codes are known, catch it before offering the
+  // download at all.
   const versionWithoutV = release.tag_name.startsWith("v") ? release.tag_name.slice(1) : release.tag_name;
+  const releaseCode = versionCodeFromAssetName(apk.name);
+
+  if (installedVersionCode != null && releaseCode != null && releaseCode < installedVersionCode) {
+    return {
+      kind: "newer-build-installed",
+      version: versionWithoutV,
+      releaseCode,
+      installedCode: installedVersionCode,
+      releaseUrl: release.html_url,
+    };
+  }
 
   return {
     kind: "available",
