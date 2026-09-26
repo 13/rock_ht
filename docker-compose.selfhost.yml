@@ -35,8 +35,12 @@ services:
       DATABASE_URL: postgres://rock_ht:${POSTGRES_PASSWORD}@db:5432/rock_ht
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${PUBLIC_URL:?set PUBLIC_URL}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      # WEB_BIND defaults to all interfaces. Behind a reverse proxy (nginx, Caddy — see README), set
+      # WEB_BIND=127.0.0.1 so only the proxy, not the whole network, can reach the container directly.
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s

@@ -94,6 +94,13 @@ jobs:
             type=semver,pattern=selfhost-{{version}}
             type=semver,pattern=selfhost-{{major}}.{{minor}}
             type=sha,prefix=selfhost-sha-,format=short
+          # Without this, metadata-action's default flavor (`latest=auto`) adds a bare, unprefixed
+          # "latest" tag whenever a `v*` semver tag is pushed — which would retag the Supabase
+          # image's `:latest` (set explicitly by the step above) with this self-host build. Every
+          # tag here is already explicit (selfhost-latest / selfhost-<version> / selfhost-sha-<hash>),
+          # so disabling the auto tag changes nothing else.
+          flavor: |
+            latest=false
 
       - name: Build and push (self-host, no Supabase build-args)
         id: push-selfhost

@@ -1,6 +1,7 @@
 import { getSessionUserId } from '@/lib/server/auth'
 import { getPool } from '@/lib/server/db'
 import { MAX_PUSH_BYTES, MAX_PUSH_CHANGES } from '@/lib/server/sync-limits'
+import { isSelfHostConfigured } from '@/lib/server/self-host-config'
 
 export const runtime = 'nodejs'
 
@@ -21,6 +22,8 @@ export const runtime = 'nodejs'
  * database error answers 500 with nothing committed, and the client retries without acking.
  */
 export async function POST(req: Request) {
+  // 404 (not 500) when this image isn't the self-host one, or self-host env vars are missing.
+  if (!isSelfHostConfigured()) return new Response('Not found', { status: 404 })
   const contentType = req.headers.get('content-type') ?? ''
   if (!/^application\/json(\s*;|$)/i.test(contentType.trim())) {
     return new Response('Unsupported media type', { status: 415 })

@@ -27,9 +27,22 @@ function create() {
       'Generate a real one (openssl rand -hex 32) and set it in .env.selfhost.',
     )
   }
+  // Comma-separated IPs/CIDRs of reverse proxies in front of this server (nginx, Caddy). When set,
+  // better-auth walks the forwarded-IP header chain right to left, skips trusted hops, and takes the
+  // first untrusted address as the client IP; unset, it trusts only a single-value IP header. See the
+  // README's self-host section for nginx/Caddy config that sets such a header.
+  const trustedProxies = process.env.TRUSTED_PROXIES
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
   return betterAuth({
     database: getPool(),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      // ALLOW_SIGNUP defaults to "true". Set to "false" once you've created your account(s) to close
+      // sign-up on a self-hosted server reachable from the internet.
+      disableSignUp: process.env.ALLOW_SIGNUP === 'false',
+    },
     // Accepts the mobile client's `expo-origin` header (as the Origin of auth POSTs).
     plugins: [expo()],
     trustedOrigins: ['rockht://'],
@@ -40,6 +53,7 @@ function create() {
       // Auth skips it there by default) and the integration tests exercise production behavior.
       // The /api/sync routes don't go through it: they only read the session.
       disableOriginCheck: false,
+      ...(trustedProxies && trustedProxies.length > 0 ? { ipAddress: { trustedProxies } } : {}),
     },
     databaseHooks: {
       user: {

@@ -1,6 +1,7 @@
 import { getSessionUserId } from '@/lib/server/auth'
 import { getPool } from '@/lib/server/db'
 import { DEFAULT_PULL_LIMIT, MAX_PULL_LIMIT } from '@/lib/server/sync-limits'
+import { isSelfHostConfigured } from '@/lib/server/self-host-config'
 
 export const runtime = 'nodejs'
 
@@ -14,6 +15,8 @@ type PullRow = { result: { changes: unknown[]; cursor: string | null; hasMore: b
  * An empty page returns the caller's cursor unchanged (null for a first pull).
  */
 export async function GET(req: Request) {
+  // 404 (not 500) when this image isn't the self-host one, or self-host env vars are missing.
+  if (!isSelfHostConfigured()) return new Response('Not found', { status: 404 })
   const userId = await getSessionUserId(req)
   if (!userId) return new Response('Unauthorized', { status: 401 })
   const url = new URL(req.url)

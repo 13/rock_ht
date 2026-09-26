@@ -460,8 +460,8 @@ export default function SyncSettingsScreen() {
                     <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
                       <Ionicons name="information-circle-outline" size={14} color={colors.warning} style={{ marginTop: 1 }} />
                       <Text style={{ flex: 1, fontSize: 12, color: colors.warning, lineHeight: 17 }}>
-                        This device's data came from another account. Signing in copies it into this
-                        account (it may appear twice if this account already has it).
+                        If this is a different account than before, this device's data will be copied
+                        into it (it may appear twice).
                       </Text>
                     </View>
                   ) : null}

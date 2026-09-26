@@ -318,24 +318,85 @@ In the app: Settings → Sync → Self-hosted → your `PUBLIC_URL` → Create a
 
 > The `ghcr.io/13/rock_ht-web` package must be **public** (Package settings → Change visibility) or an anonymous `docker compose pull` will get a 401/denied. This is a one-time setting for whoever owns the GHCR package/repo.
 
+#### Closing sign-up
+
+`ALLOW_SIGNUP` (default `true`) controls the mobile app's "Create account" flow. Once you and anyone
+else who needs an account have signed up, set `ALLOW_SIGNUP=false` in `.env.selfhost` and
+`docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d` to close registration —
+existing accounts can still sign in. Leave it `true` while you're still onboarding people.
+
+#### Putting a reverse proxy in front
+
+`docker-compose.selfhost.yml` publishes the web container directly on `WEB_PORT`. If you put nginx or
+Caddy in front for HTTPS:
+
+- Set `WEB_BIND=127.0.0.1` in `.env.selfhost` so the container only accepts connections from the proxy
+  on the same host, not the whole network.
+- Set `TRUSTED_PROXIES` to the proxy's address (e.g. `TRUSTED_PROXIES=127.0.0.1` for a proxy on the
+  same host) so better-auth derives the real client IP from the forwarded header instead of trusting
+  the proxy's own address as the client's.
+- Make sure the proxy forwards a **single-value** client-IP header — a comma-joined chain without
+  `TRUSTED_PROXIES` set is treated as untrusted and ignored.
+
+  Caddy (`Caddyfile`), terminating HTTPS and reverse-proxying to the container on `WEB_PORT`:
+  ```
+  rock-ht.example.com {
+      reverse_proxy 127.0.0.1:3000
+  }
+  ```
+  Caddy sets `X-Forwarded-For` as a single value by default when there's one hop, so no extra config
+  is needed there.
+
+  nginx, forwarding a single-value `X-Real-IP` (avoid appending to `X-Forwarded-For`, which becomes a
+  comma-separated chain unless you also set `TRUSTED_PROXIES`):
+  ```nginx
+  server {
+      listen 443 ssl;
+      server_name rock-ht.example.com;
+
+      location / {
+          proxy_pass http://127.0.0.1:3000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+  }
+  ```
+
+#### Backups
+
+The database is the only state that matters (the web container is stateless). Dump it with:
+
+```bash
+docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost exec db \
+  pg_dump -U rock_ht -d rock_ht > rock_ht-backup-$(date +%F).sql
+```
+
+Restore into a fresh volume with `psql -U rock_ht -d rock_ht < rock_ht-backup-*.sql` (after the schema
+in `db/selfhost/init` has run once against that volume).
+
 #### Upgrading
 
 `db/selfhost/init` only runs against a brand-new `pgdata` volume — an existing deployment's schema is *not* touched by pulling a new image. To move an existing self-host deployment to a newer release:
 
 1. Pull the checkout at the release tag you're upgrading to (`git fetch --tags && git checkout vX.Y.Z`), so the SQL below matches the image you're about to run.
-2. Set `ROCK_HT_VERSION` in `.env.selfhost` to that tag **without its leading `v`** (e.g. `v1.4.0` → `1.4.0`) — that's the tag suffix the self-host image is published under (`ghcr.io/13/rock_ht-web:selfhost-1.4.0`).
-3. Pull and restart the containers:
-   ```bash
-   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost pull
-   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
-   ```
-4. Apply `db/selfhost/init/02_sync.sql` (functions and triggers only — see below for why `01_schema.sql` isn't included here) against the running database, using the actual user/db from `.env.selfhost`/the compose file (`rock_ht`/`rock_ht` unless you changed them):
+2. Apply `db/selfhost/init/02_sync.sql` (functions and triggers only — see below for why `01_schema.sql` isn't included here) against the running database, **before** switching images, using the actual user/db from `.env.selfhost`/the compose file (`rock_ht`/`rock_ht` unless you changed them):
    ```bash
    docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost exec -T db \
      psql -U rock_ht -d rock_ht -v ON_ERROR_STOP=1 -1 < db/selfhost/init/02_sync.sql
    ```
+   Applying it first is what makes this a zero-downtime upgrade: the *old* image's routes keep working
+   against the *new* functions (they're additive/compatible), so there's no window where the running
+   container calls a function that no longer matches.
+3. Set `ROCK_HT_VERSION` in `.env.selfhost` to that tag **without its leading `v`** (e.g. `v1.4.0` → `1.4.0`) — that's the tag suffix the self-host image is published under (`ghcr.io/13/rock_ht-web:selfhost-1.4.0`).
+4. Pull and restart the containers:
+   ```bash
+   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost pull
+   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
+   ```
 
 `02_sync.sql` is idempotent (`create or replace function/trigger`, and `drop function if exists` before the one function whose signature changed) and safe to re-run against an already-upgraded database. `01_schema.sql` is **not** idempotent (plain `create table`/`create sequence`/`create index`, no `if not exists`) — it only ever runs once, against a fresh volume. A future schema change ships as a new, numbered upgrade script (e.g. `db/selfhost/upgrades/002_*.sql`) with its own instructions here, not as an edit to `01_schema.sql`.
+
+`03_auth.sql` (better-auth's own tables) is generated by the better-auth CLI and, like `01_schema.sql`, only runs once against a fresh volume. A future better-auth upgrade that changes its schema will need its own migration step (`npx auth generate`/`migrate` against the running database) — not covered by the two steps above, which only carry forward `02_sync.sql`.
 
 ---
 
