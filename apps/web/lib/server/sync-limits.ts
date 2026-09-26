@@ -3,3 +3,5 @@ export const MAX_PUSH_CHANGES = 500
 /** Clients pull with `limit=200`; larger requests are clamped to this. */
 export const MAX_PULL_LIMIT = 500
 export const DEFAULT_PULL_LIMIT = 200
+/** Hard cap on a push body: 500 changes of ordinary rows are well under 1 MB. */
+export const MAX_PUSH_BYTES = 5 * 1024 * 1024

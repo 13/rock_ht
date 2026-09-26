@@ -224,3 +224,59 @@ describe('limits and validation', () => {
     expect(total).toBe(451)
   })
 })
+
+// Review fix 6.
+describe('push request hardening', () => {
+  it('answers 415 unless the body is declared as JSON', async () => {
+    const { cookie } = await signUp()
+    expect((await push(cookie, { changes: [] }, { 'content-type': 'text/plain' })).status).toBe(415)
+    expect((await push(cookie, { changes: [] }, { 'content-type': 'application/x-www-form-urlencoded' })).status).toBe(415)
+    expect((await push(cookie, { changes: [] }, { 'content-type': 'application/json; charset=utf-8' })).status).toBe(204)
+  })
+
+  it('answers 413 for a declared length over 5 MB without reading the body', async () => {
+    const { cookie } = await signUp()
+    let pulled = false
+    const body = new ReadableStream({ pull() { pulled = true; throw new Error('body must not be read') } }, { highWaterMark: 0 })
+    const req = new Request(`${BASE}/api/sync/push`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie, 'content-length': String(5 * 1024 * 1024 + 1) },
+      body,
+      duplex: 'half',
+    } as RequestInit)
+    expect((await pushPOST(req)).status).toBe(413)
+    expect(pulled).toBe(false)
+  })
+
+  it('answers 413 for an undeclared body over 5 MB', async () => {
+    const { cookie } = await signUp()
+    const big = JSON.stringify({ changes: [habit(randomUUID(), 'x'.repeat(5 * 1024 * 1024), 1)] })
+    expect((await push(cookie, big)).status).toBe(413)
+  })
+})
+
+// Review fix 1: an error that isn't about one change fails the push with 500, so the client
+// keeps its outbox and retries instead of acking changes that were never written.
+describe('push errors', () => {
+  it('answers 500 (not 204) when sync_push_for raises a non-data error, and the client does not ack', async () => {
+    const { cookie } = await signUp()
+    const title = `boom-${randomUUID()}`
+    await getPool().query(`
+      create or replace function test_route_boom() returns trigger language plpgsql as $f$
+      begin
+        if new.title = '${title}' then raise exception 'simulated deadlock' using errcode = '40P01'; end if;
+        return new;
+      end $f$`)
+    await getPool().query('create trigger zz_test_route_boom before insert on public.habits for each row execute function test_route_boom()')
+    try {
+      const good = randomUUID()
+      expect((await push(cookie, { changes: [habit(good, 'ok', 1), habit(randomUUID(), title, 1)] })).status).toBe(500)
+      await expect(client(cookie).push([habit(good, 'ok', 1), habit(randomUUID(), title, 1)])).rejects.toThrow(/500/)
+      const { rows } = await getPool().query('select 1 from public.habits where id = $1', [good])
+      expect(rows).toEqual([])
+    } finally {
+      await getPool().query('drop trigger zz_test_route_boom on public.habits')
+      await getPool().query('drop function test_route_boom()')
+    }
+  })
+})

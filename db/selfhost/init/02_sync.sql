@@ -9,7 +9,9 @@
 --
 -- Contract with the mobile client (packages/sync, apps/mobile/lib/sync):
 -- * push merges each change by last-write-wins on updated_at, one change at
---   a time; a change that can't be applied is skipped, never fails the batch.
+--   a time; a change that can't be applied (bad value, constraint) is skipped
+--   and never fails the batch. Any other error (timeouts, deadlocks, lost
+--   connections) fails the whole push, so the client retries it unacked.
 -- * pull pages rows by server_seq; the cursor is the last seq returned.
 -- * instants are emitted as `toISOString()` strings (ms precision, 'Z').
 -- ============================================================
@@ -61,8 +63,10 @@ begin
   end if;
   new.server_seq := nextval('public.sync_seq');
   -- Web/SQL writers that don't set updated_at still advance it; sync writers set it explicitly.
+  -- Millisecond precision, like every device's toISOString() instants, so the value a pull
+  -- emits is exactly the value stored and last-write-wins compares like with like.
   if tg_op = 'UPDATE' and new.updated_at is not distinct from old.updated_at then
-    new.updated_at := now();
+    new.updated_at := date_trunc('milliseconds', now());
   end if;
   return new;
 end;
@@ -86,13 +90,22 @@ declare
   c jsonb;
   r jsonb;
   v_updated timestamptz;
-  v_habit uuid;
+  v_onboarded boolean;
 begin
   perform public.sync_lock_user(p_user);
+  -- Every synced row references the profile. If the sign-up hook failed and this push
+  -- carries no profile change, create a minimal one (dated just after the epoch, so any
+  -- device's profile push still wins it); otherwise every habit would fail its foreign key.
+  insert into public.profiles (id, email, updated_at)
+  values (p_user, '', '1970-01-01T00:00:00.001Z')
+  on conflict (id) do nothing;
   for c in select value from jsonb_array_elements(p_changes) loop
-    -- One subtransaction per change: a change that fails (malformed value, constraint,
-    -- unknown table, missing parent) is skipped with a warning. Raising instead would
-    -- fail the whole push, and the client would retry the same outbox head forever.
+    -- One subtransaction per change: a change that can't be applied (malformed value,
+    -- constraint, unknown table, missing parent) is skipped with a warning. Raising instead
+    -- would fail the whole push, and the client would retry the same outbox head forever.
+    -- Only those errors are skipped: anything else (lock/statement timeout, deadlock,
+    -- serialization failure, admin shutdown) propagates and fails the push, so the client
+    -- retries it rather than acking changes that were never written.
     begin
       r := c->'row';
       v_updated := (r->>'updated_at')::timestamptz;
@@ -101,6 +114,7 @@ begin
       end if;
       case c->>'table'
       when 'profiles' then
+        v_onboarded := coalesce((r->>'onboarding_completed')::boolean, false);
         -- Upsert, not update: if the sign-up hook failed there is no row yet, and every
         -- habit push would then fail its foreign key.
         insert into public.profiles as p (id, email, display_name, avatar_url, timezone, theme,
@@ -112,22 +126,29 @@ begin
           coalesce((r->>'created_at')::timestamptz, now()), v_updated)
         on conflict (id) do update set
           -- coalesce: a fresh device's claim() pushes display_name/avatar_url = null
-          -- and must not wipe what the account already has. email is the account's.
+          -- and must not wipe what the account already has. email is the account's; a
+          -- device only fills it in on the placeholder row created above.
+          email = coalesce(nullif(p.email, ''), nullif(r->>'email', ''), p.email),
           display_name = coalesce(r->>'display_name', p.display_name),
           avatar_url = coalesce(r->>'avatar_url', p.avatar_url),
           timezone = coalesce(r->>'timezone', p.timezone),
           theme = coalesce(r->>'theme', p.theme),
           -- Onboarding only ever completes: an onboarded device must never be sent back.
-          onboarding_completed = p.onboarding_completed
-            or coalesce((r->>'onboarding_completed')::boolean, false),
+          onboarding_completed = p.onboarding_completed or v_onboarded,
           time_format = coalesce(r->>'time_format', p.time_format),
           date_format = coalesce(r->>'date_format', p.date_format),
-          updated_at = excluded.updated_at
+          -- Won, but the flag stays true against the push's false: the stored row differs
+          -- from the pusher's copy, so date it 1 ms later and the pusher pulls it back.
+          updated_at = case when p.onboarding_completed and not v_onboarded
+                            then excluded.updated_at + interval '1 millisecond'
+                            else excluded.updated_at end
         where p.updated_at < excluded.updated_at;
-        -- Lost last-write-wins but says onboarded: take just that flag. The trigger bumps
-        -- updated_at, so the merged row reaches every device on its next pull.
-        if coalesce((r->>'onboarding_completed')::boolean, false) then
-          update public.profiles set onboarding_completed = true
+        -- Lost last-write-wins but says onboarded: take just that flag, 1 ms newer than the
+        -- current row (the minimal bump, not now(), which would beat any later device edit
+        -- made on a clock behind the server's), so every device pulls the merged row.
+        if v_onboarded then
+          update public.profiles
+          set onboarding_completed = true, updated_at = updated_at + interval '1 millisecond'
           where id = p_user and not onboarding_completed;
         end if;
       when 'habits' then
@@ -147,29 +168,40 @@ begin
         where t.user_id = p_user and t.updated_at < excluded.updated_at;
       when 'habit_completions' then
         -- A completion of another user's habit is dropped silently (the client acks it).
-        -- A missing habit is not silent: the foreign key fails and the change is skipped
-        -- with a warning (outbox order pushes parent habits first, so this is a bug).
+        -- A missing habit is not silent: the change is skipped with a warning (outbox order
+        -- pushes parent habits first, so this is a bug).
         if exists (select 1 from public.habits h
                    where h.id = (r->>'habit_id')::uuid and h.user_id <> p_user) then
           continue;
         end if;
+        -- Ownership is checked again inside the insert: another user's habit with this id
+        -- may commit between the check above and the foreign-key check, which would accept it.
         insert into public.habit_completions as t (id, habit_id, user_id, completed_date, value, note,
           created_at, updated_at, deleted_at)
-        values ((r->>'id')::uuid, (r->>'habit_id')::uuid, p_user, (r->>'completed_date')::date,
+        select (r->>'id')::uuid, (r->>'habit_id')::uuid, p_user, (r->>'completed_date')::date,
           (r->>'value')::int, r->>'note', (r->>'created_at')::timestamptz,
-          v_updated, (r->>'deleted_at')::timestamptz)
+          v_updated, (r->>'deleted_at')::timestamptz
+        where exists (select 1 from public.habits h
+                      where h.id = (r->>'habit_id')::uuid and h.user_id = p_user)
         on conflict (id) do update set
           value = excluded.value, note = excluded.note,
           updated_at = excluded.updated_at, deleted_at = excluded.deleted_at
         where t.user_id = p_user and t.updated_at < excluded.updated_at;
+        if not found and not exists (select 1 from public.habits h
+                                     where h.id = (r->>'habit_id')::uuid and h.user_id = p_user) then
+          raise exception 'habit % of completion % is missing or not the user''s',
+            r->>'habit_id', r->>'id' using errcode = 'foreign_key_violation';
+        end if;
       when 'journal_entries' then
         -- The linked habit is optional: a missing one, or one owned by someone else,
-        -- is written as null instead of failing (or leaking a foreign reference).
-        select h.id into v_habit from public.habits h
-          where h.id = (r->>'habit_id')::uuid and h.user_id = p_user;
+        -- is written as null instead of failing (or leaking a foreign reference). The
+        -- ownership lookup is part of the insert, so it can't go stale before it.
         insert into public.journal_entries as t (id, user_id, habit_id, entry_date, content, mood,
           created_at, updated_at, deleted_at)
-        values ((r->>'id')::uuid, p_user, v_habit, (r->>'entry_date')::date,
+        values ((r->>'id')::uuid, p_user,
+          (select h.id from public.habits h
+            where h.id = (r->>'habit_id')::uuid and h.user_id = p_user),
+          (r->>'entry_date')::date,
           r->>'content', (r->>'mood')::smallint, (r->>'created_at')::timestamptz,
           v_updated, (r->>'deleted_at')::timestamptz)
         on conflict (id) do update set
@@ -179,7 +211,10 @@ begin
       else
         raise exception 'unknown sync table %', c->>'table';
       end case;
-    exception when others then
+    -- Class 22 (data_exception: bad uuid/int/date/json values), class 23
+    -- (integrity_constraint_violation: not null, check, unique, foreign key) and P0001
+    -- (raise_exception: the explicit rejections above).
+    exception when data_exception or integrity_constraint_violation or raise_exception then
       raise warning 'sync_push_for(%): skipped % %: % (%)',
         p_user, c->>'table', c->'row'->>'id', sqlerrm, sqlstate;
     end;

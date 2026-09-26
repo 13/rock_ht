@@ -239,7 +239,7 @@ describe('onboarding flag merge', () => {
     // The merged row is re-published (newer seq and updated_at), so every device pulls it.
     const again = await pull(u, Number(cursor))
     expect(again.changes).toHaveLength(1)
-    expect(again.changes[0]!.row.updated_at as string > ts(20)).toBe(true)
+    expect(again.changes[0]!.row.updated_at).toBe('2026-01-01T00:20:00.001Z')
   })
 })
 
@@ -359,5 +359,135 @@ describe('profile upsert on push', () => {
     await push(u, [profile(other, 40, { theme: 'midnight' })])
     expect((await one('select theme from public.profiles where id = $1', [other]))?.theme).toBe('dark')
     expect((await one('select theme from public.profiles where id = $1', [u]))?.theme).toBe('midnight')
+  })
+})
+
+// Review fix 1: only data (22), integrity (23) and raise_exception (P0001) errors are skipped.
+describe('errors that are not about the change itself', () => {
+  it('fails the whole push, committing nothing from the batch, so the client retries without acking', async () => {
+    const u = await newUser()
+    const title = `boom-${randomUUID()}`
+    await pool.query(`
+      create or replace function test_boom() returns trigger language plpgsql as $f$
+      begin
+        if new.title = '${title}' then raise exception 'simulated serialization failure' using errcode = '40001'; end if;
+        return new;
+      end $f$`)
+    await pool.query('create trigger zz_test_boom before insert on public.habits for each row execute function test_boom()')
+    try {
+      const good = randomUUID()
+      await expect(push(u, [habit(good, 'before-boom', 1), habit(randomUUID(), title, 1)]))
+        .rejects.toMatchObject({ code: '40001' })
+      expect(await one('select 1 from public.habits where id = $1', [good])).toBeUndefined()
+    } finally {
+      await pool.query('drop trigger zz_test_boom on public.habits')
+      await pool.query('drop function test_boom()')
+    }
+  })
+
+  it('fails the push on a lock timeout instead of skipping the change', async () => {
+    const u = await newUser()
+    const h = randomUUID()
+    await push(u, [habit(h, 'locked', 1)])
+    const a = await pool.connect()
+    const b = await pool.connect()
+    try {
+      await a.query('begin')
+      await a.query('select 1 from public.habits where id = $1 for update', [h])
+      await b.query("set lock_timeout = '200ms'")
+      await expect(push(u, [habit(randomUUID(), 'first', 2), habit(h, 'newer', 3)], b))
+        .rejects.toMatchObject({ code: '55P03' })
+      await a.query('rollback')
+      expect((await pull(u)).changes.filter((c) => c.table === 'habits').map((c) => c.row.title)).toEqual(['locked'])
+    } finally {
+      a.release(true)
+      b.release(true)
+    }
+  })
+})
+
+// Review fix 2.
+describe('missing profile row', () => {
+  it('creates a minimal profile so a push without a profile change still applies habits and completions', async () => {
+    const u = randomUUID()
+    const h = randomUUID()
+    await push(u, [habit(h, 'no-profile', 1), completion(h, '2026-01-01', 1)])
+    expect(await one("select email, public.sync_ts(updated_at) as updated_at from public.profiles where id = $1", [u]))
+      .toEqual({ email: '', updated_at: '1970-01-01T00:00:00.001Z' })
+    expect((await pull(u)).changes.map((c) => c.table)).toEqual(['profiles', 'habits', 'habit_completions'])
+  })
+})
+
+// Review fix 4: the onboarding merge bumps updated_at by the minimum, so the merged row is pulled.
+describe('onboarding merge bump', () => {
+  it('bumps a losing onboarded push by exactly 1 ms over the current row', async () => {
+    const u = await newUser()
+    await pool.query("update public.profiles set theme = 'sunset', updated_at = $2 where id = $1", [u, ts(20)])
+    await push(u, [profile(u, 10, { onboarding_completed: true })])
+    expect(await one('select onboarding_completed, public.sync_ts(updated_at) as t from public.profiles where id = $1', [u]))
+      .toEqual({ onboarding_completed: true, t: '2026-01-01T00:20:00.001Z' })
+  })
+
+  it('keeps true against a winning push that says false, 1 ms newer than the push so the pusher pulls it', async () => {
+    const u = await newUser()
+    await pool.query('update public.profiles set onboarding_completed = true, updated_at = $2 where id = $1', [u, ts(0)])
+    const { cursor } = await pull(u)
+    await push(u, [profile(u, 10, { onboarding_completed: false, theme: 'midnight' })])
+    expect(await one('select onboarding_completed, theme, public.sync_ts(updated_at) as t from public.profiles where id = $1', [u]))
+      .toEqual({ onboarding_completed: true, theme: 'midnight', t: '2026-01-01T00:10:00.001Z' })
+    const again = await pull(u, Number(cursor))
+    expect(again.changes.map((c) => c.row.updated_at)).toEqual(['2026-01-01T00:10:00.001Z'])
+  })
+
+  it('does not bump a winning push that agrees on the flag', async () => {
+    const u = await newUser()
+    await pool.query('update public.profiles set onboarding_completed = true, updated_at = $2 where id = $1', [u, ts(0)])
+    await push(u, [profile(u, 10)])
+    expect((await one<{ t: string }>('select public.sync_ts(updated_at) as t from public.profiles where id = $1', [u]))?.t).toBe(ts(10))
+  })
+})
+
+// Review fix 5: ownership is checked inside the insert, not only before it.
+describe('foreign habit race', () => {
+  it("never writes a completion for a habit another user's open transaction is creating", async () => {
+    const u = await newUser()
+    const foreign = randomUUID()
+    // Holds the completion insert between its ownership check and its foreign-key check.
+    await pool.query(`
+      create or replace function test_slow_completion() returns trigger language plpgsql as $f$
+      begin
+        if new.habit_id = '${foreign}' then perform pg_sleep(0.6); end if;
+        return new;
+      end $f$`)
+    await pool.query('create trigger zz_test_slow before insert on public.habit_completions for each row execute function test_slow_completion()')
+    const a = await pool.connect()
+    try {
+      await a.query('begin')
+      await push(other, [habit(foreign, 'theirs-in-flight', 1)], a)
+      // The pre-check sees no foreign owner yet (uncommitted); the owner commits mid-insert.
+      const racing = push(u, [completion(foreign, '2026-01-01', 1)])
+      await new Promise((r) => setTimeout(r, 250))
+      await a.query('commit')
+      await expect(racing).resolves.toBeUndefined()
+      expect(await one('select user_id from public.habit_completions where habit_id = $1', [foreign])).toBeUndefined()
+    } finally {
+      a.release(true)
+      await pool.query('drop trigger zz_test_slow on public.habit_completions')
+      await pool.query('drop function test_slow_completion()')
+    }
+  })
+})
+
+// Review fix 7: the trigger's own timestamps are millisecond-precise, like every device's.
+describe('trigger timestamps', () => {
+  it('bumps updated_at for a web-style update to a whole millisecond', async () => {
+    const u = await newUser()
+    const h = randomUUID()
+    await push(u, [habit(h, 'web-edit', 1)])
+    for (let i = 0; i < 5; i++) {
+      await pool.query("update public.habits set title = 'edited' || $2 where id = $1", [h, i])
+      const r = await one<{ us: string }>('select (extract(microseconds from updated_at)::bigint % 1000)::text as us from public.habits where id = $1', [h])
+      expect(r?.us).toBe('0')
+    }
   })
 })
