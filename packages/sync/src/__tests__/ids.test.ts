@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { completionId } from '../ids'
+import { completionId, copiedId } from '../ids'
 
 describe('completionId', () => {
   it('is deterministic for the same habit and date', () => {
@@ -19,5 +19,17 @@ describe('completionId casing', () => {
   it('derives the same id for an uppercase and a lowercase habit id', () => {
     const lower = '0b5c6a1e-2f3d-4c5b-8a9e-1f2d3c4b5a6e'
     expect(completionId(lower.toUpperCase(), '2026-09-24')).toBe(completionId(lower, '2026-09-24'))
+  })
+})
+
+describe('copiedId', () => {
+  const a = '0b5c6a1e-2f3d-4c5b-8a9e-1f2d3c4b5a6e'
+  it('gives a row copied into an account one stable new id', () => {
+    expect(copiedId('account-B', a)).toBe(copiedId('account-B', a.toUpperCase()))
+    expect(copiedId('account-B', a)).not.toBe(a)
+    expect(copiedId('account-B', a)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  })
+  it('differs per target account', () => {
+    expect(copiedId('account-B', a)).not.toBe(copiedId('account-C', a))
   })
 })

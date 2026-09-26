@@ -1,5 +1,5 @@
 import {
-  completionId, isNewer, SYNC_TABLES,
+  completionId, copiedId, isNewer, SYNC_TABLES,
   type OutboxEntry, type SyncChange, type SyncLocal, type SyncRow, type SyncTable,
 } from '@rock_ht/sync'
 import { parseFrequency, frequencyToJson, today } from '@rock_ht/utils'
@@ -10,6 +10,7 @@ import type {
 import { BACKUP_FORMAT, BACKUP_VERSION, type Backup } from './backup'
 import { COLUMNS, fromSqlRow, toSqlRow } from './codec'
 import type { SqlDriver, SqlParam } from './driver'
+import { rekeyRows, type RekeyTables } from './rekey'
 
 export interface LocalStoreDeps {
   driver: SqlDriver
@@ -40,6 +41,13 @@ type ClaimProgress = { table: (typeof CLAIM_CHUNKED)[number]; after: number }
  * *different* account must give it a new id (the server never lets one account write another's ids).
  */
 const ACCOUNTS_KEY = 'claimed_accounts'
+/**
+ * JSON array of the owners of backups imported while the device had no account (see `importBackup`):
+ * those rows kept their ids, which may exist on a server under one of these accounts, so a `claim`
+ * to any other account re-keys them. Cleared by the next claim that rewrites the rows.
+ */
+const IMPORTED_KEY = 'imported_accounts'
+const REKEYED_TABLES = ['habits', 'habit_completions', 'journal_entries'] as const
 
 /**
  * Floor for a claimed-but-not-pushed profile's `updated_at` (see `claim`, `pushLocalProfile: false`).
@@ -341,13 +349,42 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exported_at: now(), tables }
   }
 
-  /** Merge a backup into userId's data in one transaction; see the import rules in Task 8. */
+  /**
+   * Merge a backup into userId's data in one transaction; see the import rules in Task 8.
+   *
+   * Completion ids are normalized to `completionId(habit_id, completed_date)`: exports from before
+   * deterministic ids (web/Supabase) carry random ones, which would never merge with this device's
+   * copy of the same day (and trip the unique (habit_id, completed_date) constraint).
+   *
+   * A backup of another account's data (its rows' owner isn't `userId`) may carry ids that account
+   * already has on a server, where they'd be skipped as another account's. So, like `claim`:
+   * - on a device that is (or was) signed in to an account, userId is that account, the rows are
+   *   pushed as they are, so they are re-keyed now (`rekeyRows`), to ids derived from userId and the
+   *   old id (`copiedId`), so importing the same backup again merges instead of duplicating;
+   * - on a device with no account yet, they keep their ids (signing in to the backup's own account
+   *   then merges with it, the common "restore on a new phone, then sign in" path), and the owners
+   *   are recorded in `IMPORTED_KEY` so that a `claim` to any other account re-keys them.
+   */
   async function importBackup(userId: string, backup: Backup): Promise<{ imported: number; skipped: number }> {
     let imported = 0
     let skipped = 0
     await driver.transaction(async (tx) => {
+      let rows: RekeyTables = {
+        habits: backup.tables.habits,
+        habit_completions: backup.tables.habit_completions,
+        journal_entries: backup.tables.journal_entries,
+      }
+      const owners = backupOwners(backup).filter((o) => o !== userId)
+      if (owners.length) {
+        if ((await claimedAccounts(tx)).includes(userId)) {
+          rows = rekeyRows(rows, (_table, oldId) => copiedId(userId, oldId))
+        } else {
+          const known = await importedAccounts(tx)
+          await setMeta(IMPORTED_KEY, JSON.stringify([...new Set([...known, ...owners])]), tx)
+        }
+      }
       for (const table of SYNC_TABLES) {
-        for (const src of backup.tables[table]) {
+        for (const src of table === 'profiles' ? backup.tables.profiles : rows[table]) {
           if (table === 'profiles') {
             const local = await getRow('profiles', userId, tx)
             // The email identifies this device's account (or '' offline), never the backup's source:
@@ -362,6 +399,9 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
             continue
           }
           const incoming: SyncRow = { ...src, user_id: userId }
+          if (table === 'habit_completions') {
+            incoming.id = completionId(incoming.habit_id as string, incoming.completed_date as string)
+          }
           const existing = await getRow(table, incoming.id, tx)
           if (existing && !existing.deleted_at && !isNewer(incoming, existing)) {
             skipped++
@@ -375,6 +415,29 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       }
     })
     return { imported, skipped }
+  }
+
+  /** Whose data a backup holds: its profile ids and its rows' user_ids (normally one account). */
+  function backupOwners(backup: Backup): string[] {
+    const owners = new Set<string>()
+    for (const table of SYNC_TABLES) {
+      for (const row of backup.tables[table]) {
+        owners.add(String((table === 'profiles' ? row.id : row.user_id) ?? ''))
+      }
+    }
+    return [...owners]
+  }
+
+  /** The `IMPORTED_KEY` list; a corrupt value counts as an unknown owner (so a claim re-keys). */
+  async function importedAccounts(tx: SqlDriver): Promise<string[]> {
+    const raw = await getMeta(IMPORTED_KEY, tx)
+    if (!raw) return []
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) return parsed
+    } catch { /* fall through */ }
+    console.warn('claim: imported_accounts is corrupt; treating the imported rows as foreign', raw)
+    return ['']
   }
 
   async function getMeta(key: string, db: SqlDriver = driver) {
@@ -440,7 +503,10 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
       const accounts = await claimedAccounts(tx)
       if (!accounts.includes(toUserId)) await setMeta(ACCOUNTS_KEY, JSON.stringify([...accounts, toUserId]), tx)
       if (await ownedBy(tx, toUserId)) { await setMeta(ACCOUNT_KEY, toUserId, tx); return }
-      if (await ownerMaybeOnServer(tx, accounts, toUserId)) await rekey(tx)
+      const imported = await importedAccounts(tx)
+      if (await ownerMaybeOnServer(tx, accounts, toUserId) || imported.some((o) => o !== toUserId)) await rekey(tx)
+      // From here on the rows are toUserId's (re-keyed, or imported from toUserId itself).
+      if (imported.length) await setMeta(IMPORTED_KEY, null, tx)
       for (const t of ['habits', 'habit_completions', 'journal_entries'] as const) {
         await tx.run(`UPDATE ${t} SET user_id = ?`, [toUserId])
       }
@@ -509,16 +575,10 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
   }
 
   /**
-   * Give every row a new id, for a claim that copies rows already synced under one account into
-   * another. The server keeps ids per account (`sync_push_for` skips an id another account owns), so
-   * the old ids would never reach the new account.
-   *
-   * Habits and journal entries get fresh uuids; completions are re-derived as
-   * `completionId(newHabitId, completed_date)` (the id every device must agree on). References
-   * follow: `habit_completions.habit_id` and `journal_entries.habit_id`. Tombstones are dropped rather
-   * than re-keyed: under a new id they delete nothing on the server. With them go the completions of a
-   * deleted habit (hidden locally already, see `LIVE_HABIT_FILTER`), and a journal entry about a
-   * deleted habit loses the link (the server would write it as null anyway).
+   * Give every row a new id (fresh uuids; the rules are `rekeyRows`'), for a claim that copies rows
+   * already synced under one account into another. The server keeps ids per account
+   * (`sync_push_for` skips an id another account owns), so the old ids would never reach the new
+   * account. The rows are rewritten in their rowid order, which the chunked re-queue follows.
    *
    * Runs inside `claim`'s first transaction, all rows at once: re-keying completions in later chunks
    * would leave a window where a completion's id no longer matches its habit (a toggle then trips the
@@ -526,25 +586,17 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * most), so the one longer transaction on an account switch is the price of never being half done.
    */
   async function rekey(tx: SqlDriver): Promise<void> {
-    await tx.run('DELETE FROM habit_completions WHERE deleted_at IS NOT NULL OR habit_id NOT IN (SELECT id FROM habits WHERE deleted_at IS NULL)')
-    await tx.run('DELETE FROM journal_entries WHERE deleted_at IS NOT NULL')
-    await tx.run('UPDATE journal_entries SET habit_id = NULL WHERE habit_id NOT IN (SELECT id FROM habits WHERE deleted_at IS NULL)')
-    await tx.run('DELETE FROM habits WHERE deleted_at IS NOT NULL')
-    const habits = await tx.all<{ id: string }>('SELECT id FROM habits')
-    for (const { id } of habits) {
-      const fresh = newId()
-      await tx.run('UPDATE habits SET id = ? WHERE id = ?', [fresh, id])
-      await tx.run('UPDATE journal_entries SET habit_id = ? WHERE habit_id = ?', [fresh, id])
-      const completions = await tx.all<{ id: string; completed_date: string }>(
-        'SELECT id, completed_date FROM habit_completions WHERE habit_id = ?', [id],
-      )
-      for (const c of completions) {
-        await tx.run('UPDATE habit_completions SET id = ?, habit_id = ? WHERE id = ?',
-          [completionId(fresh, c.completed_date), fresh, c.id])
-      }
+    const current = {} as RekeyTables
+    for (const t of REKEYED_TABLES) {
+      const raws = await tx.all<Record<string, SqlParam>>(`SELECT * FROM ${t} ORDER BY rowid`)
+      current[t] = raws.map((r) => fromSqlRow(t, r))
     }
-    const entries = await tx.all<{ id: string }>('SELECT id FROM journal_entries')
-    for (const { id } of entries) await tx.run('UPDATE journal_entries SET id = ? WHERE id = ?', [newId(), id])
+    const next = rekeyRows(current, () => newId())
+    // Children first: nothing references a completion or a journal entry.
+    for (const t of ['habit_completions', 'journal_entries', 'habits'] as const) await tx.run(`DELETE FROM ${t}`)
+    for (const t of REKEYED_TABLES) {
+      for (const row of next[t]) await upsert(tx, t, row)
+    }
   }
 
   /** True when a profile row exists at `userId` and no row (tombstones included) belongs to anyone else. */
