@@ -78,17 +78,20 @@ export async function supabaseBackend(url: string, anonKey: string): Promise<Syn
       },
     }),
     async signIn(email, password) {
-      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      const { data, error } = await withTimeout("signIn", client.auth.signInWithPassword({ email, password }));
       if (error || !data.user) throw new Error(error?.message || "Sign-in failed");
       return data.user.id;
     },
     async signUp(email, password, name) {
       // handle_new_user (008) names the profile from full_name, then name.
-      const { data, error } = await client.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: name, name } },
-      });
+      const { data, error } = await withTimeout(
+        "signUp",
+        client.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name, name } },
+        }),
+      );
       if (error || !data.user) throw new Error(error?.message || "Sign-up failed");
       // Email confirmation on: no session until the link is clicked, so there is nothing to claim yet.
       if (!data.session) throw new ConfirmEmailError();
@@ -96,9 +99,11 @@ export async function supabaseBackend(url: string, anonKey: string): Promise<Syn
     },
     async signOut() {
       // Only this device's session. signOut keeps the stored session when it can't reach the
-      // server, but disconnecting must work offline, so the local copy is always dropped.
+      // server, but disconnecting must work offline, so the local copy is always dropped — also
+      // when the call hangs: it is timed out like every other auth round trip, and the finally
+      // below still runs.
       try {
-        await client.auth.signOut({ scope: "local" });
+        await withTimeout("signOut", client.auth.signOut({ scope: "local" }));
       } finally {
         await clearLocalSession();
       }

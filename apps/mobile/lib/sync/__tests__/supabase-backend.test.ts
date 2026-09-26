@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncAuthError } from "@rock_ht/sync";
 
 // The real module loads native SecureStore and the URL polyfill; the test drives supabase-js too.
@@ -184,5 +184,52 @@ describe("supabaseBackend", () => {
     auth.userError = new AuthRetryableFetchError("Failed to fetch");
     const b = await supabaseBackend("http://x.test", "anon");
     await expect(b.currentUserId()).rejects.toThrow("Failed to fetch");
+  });
+
+  describe("auth round trips are timed out, so connect/disconnect can't hang", () => {
+    const never = () => new Promise<never>(() => {});
+    afterEach(() => vi.useRealTimers());
+
+    it("signIn rejects after the timeout when the server never answers", async () => {
+      vi.useFakeTimers();
+      auth.signInWithPassword.mockImplementation(never);
+      const b = await supabaseBackend("http://x.test", "anon");
+      const assertion = expect(b.signIn("a@b.co", "pw")).rejects.toThrow(/signIn.*timed out/);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+    });
+
+    it("signUp rejects after the timeout when the server never answers", async () => {
+      vi.useFakeTimers();
+      auth.signUp.mockImplementation(never);
+      const b = await supabaseBackend("http://x.test", "anon");
+      const assertion = expect(b.signUp("a@b.co", "password1", "Ann")).rejects.toThrow(/signUp.*timed out/);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+    });
+
+    it("signOut times out but still clears the stored session", async () => {
+      vi.useFakeTimers();
+      const b = await supabaseBackend("http://x.test", "anon");
+      const key = sessionStorageKey("http://x.test");
+      const storage = createClient.mock.calls[0]![2].auth.storage as { setItem(k: string, v: string): Promise<void> };
+      await storage.setItem(key, "x".repeat(3000));
+      await storage.setItem(`${key}-user`, "{}");
+      auth.signOut.mockImplementation(never);
+      const assertion = expect(b.signOut()).rejects.toThrow(/signOut.*timed out/);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+      expect(secure.size).toBe(0);
+    });
+
+    it("signOut that throws still clears the stored session", async () => {
+      const b = await supabaseBackend("http://x.test", "anon");
+      const key = sessionStorageKey("http://x.test");
+      const storage = createClient.mock.calls[0]![2].auth.storage as { setItem(k: string, v: string): Promise<void> };
+      await storage.setItem(key, "{}");
+      auth.signOut.mockRejectedValue(new Error("boom"));
+      await expect(b.signOut()).rejects.toThrow("boom");
+      expect(secure.size).toBe(0);
+    });
   });
 });
