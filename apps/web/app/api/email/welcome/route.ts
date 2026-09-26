@@ -1,23 +1,46 @@
 import { NextResponse } from 'next/server'
 import { getResend } from '@/lib/email'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]!)
+}
+
 export async function POST(req: Request) {
-  let email: string | undefined
   let name: string | undefined
 
   try {
     const body = await req.json()
-    email = typeof body?.email === 'string' ? body.email : undefined
     name = typeof body?.name === 'string' ? body.name : undefined
   } catch {
     return NextResponse.json({ ok: false })
   }
 
-  if (!email || !name) {
-    return NextResponse.json({ ok: false })
+  // Auth required, and the email is always the signed-in user's own — any `email` in the body is
+  // ignored. Without this, anyone could POST an arbitrary address here and use this route to spam it.
+  let email: string | undefined
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase.auth.getUser()
+    email = data.user?.email ?? undefined
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 401 })
   }
+  if (!email) {
+    return NextResponse.json({ ok: false }, { status: 401 })
+  }
+
+  const safeName = escapeHtml(name || email.split('@')[0] || email)
 
   try {
     const { error } = await getResend().emails.send({
@@ -26,7 +49,7 @@ export async function POST(req: Request) {
       subject: 'Welcome to rock 🌀',
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-          <h1 style="font-size: 24px; margin-bottom: 8px;">Welcome, ${name}! 🎉</h1>
+          <h1 style="font-size: 24px; margin-bottom: 8px;">Welcome, ${safeName}! 🎉</h1>
           <p style="color: #666; line-height: 1.6; margin-bottom: 16px;">
             Your rock account is ready. Start building habits that stick.
           </p>
