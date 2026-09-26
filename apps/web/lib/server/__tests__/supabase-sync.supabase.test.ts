@@ -17,7 +17,8 @@ import { createClient } from '@supabase/supabase-js'
 import { completionId } from '@rock_ht/sync'
 import {
   addCompletion, archiveHabit, createHabit, createJournalEntry, deleteHabit, deleteJournalEntry, getCompletionForDate, getCompletions,
-  getHabit, getHabits, getJournalEntries, getTodayCompletions, removeCompletion, updateHabit, type TypedSupabaseClient,
+  getHabit, getHabits, getJournalEntries, getStreaks, getTodayCompletions, removeCompletion, reorderHabits, updateHabit,
+  type TypedSupabaseClient,
 } from '@rock_ht/db'
 
 const DB_URL = process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
@@ -263,6 +264,14 @@ describe('008: RPC permissions', () => {
     }
   })
 
+  it('refuses recalculate_streak (security definer, any habit id) to every API role', async () => {
+    const a = randomUUID()
+    for (const role of ['authenticated', 'anon'] as const) {
+      await expect(as(role, a, (c) => c.query('select public.recalculate_streak(gen_random_uuid())')))
+        .rejects.toThrow(/permission denied/)
+    }
+  })
+
   it('refuses the wrappers to anon and to a token without a user', async () => {
     await expect(as('anon', null, (c) => c.query("select public.sync_push('[]'::jsonb)"))).rejects.toThrow(/permission denied/)
     await expect(as('anon', null, (c) => c.query('select public.sync_pull(0, 10)'))).rejects.toThrow(/permission denied/)
@@ -449,8 +458,15 @@ describe('008 end to end: GoTrue sign-up, PostgREST RPCs and the @rock_ht/db web
     await deleteJournalEntry(db, j.id)
     expect((await getJournalEntries(db, id)).map((e) => e.id)).not.toContain(j.id)
 
+    // The completion trigger keeps a streak row for the habit, listed while the habit is live.
+    expect((await getStreaks(db, id)).map((x) => x.habit_id)).toContain(h.id)
+    expect((await getStreaks(db, id))[0]).not.toHaveProperty('habits')
+
     await deleteHabit(db, h.id)
     expect((await getHabits(db, id)).map((x) => x.id)).not.toContain(h.id)
+    // The streak row outlives the tombstone but is no longer listed.
+    expect((await one('select count(*)::int as n from public.habit_streaks where habit_id = $1', [h.id])).n).toBe(1)
+    expect((await getStreaks(db, id)).map((x) => x.habit_id)).not.toContain(h.id)
     expect(await getHabit(db, h.id)).toBeNull()
     // Its completions are kept (as on mobile) but no longer listed.
     expect((await one('select count(*)::int as n from public.habit_completions where habit_id = $1 and deleted_at is null', [h.id])).n).toBe(1)
@@ -460,6 +476,9 @@ describe('008 end to end: GoTrue sign-up, PostgREST RPCs and the @rock_ht/db web
     // Archiving a deleted habit (a stale tab) leaves the tombstone alone.
     const tombBefore = await one('select updated_at, is_archived from public.habits where id = $1', [h.id])
     await archiveHabit(db, h.id)
+    expect(await one('select updated_at, is_archived from public.habits where id = $1', [h.id])).toEqual(tombBefore)
+    // So does reordering it.
+    await reorderHabits(db, [{ id: h.id, sort_order: 99 }])
     expect(await one('select updated_at, is_archived from public.habits where id = $1', [h.id])).toEqual(tombBefore)
 
     // Mobile pulls the tombstones.

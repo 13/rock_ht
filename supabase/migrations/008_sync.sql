@@ -556,3 +556,12 @@ revoke execute on function public.sync_push(jsonb) from public, anon;
 revoke execute on function public.sync_pull(bigint, int) from public, anon;
 grant execute on function public.sync_push(jsonb) to authenticated;
 grant execute on function public.sync_pull(bigint, int) to authenticated;
+
+-- recalculate_streak is security definer and takes any habit id, so over PostgREST any signed-in
+-- user could force a recompute of another user's streak cache. Only the completion
+-- triggers call it, and they run as its owner (also security definer), so no API role needs it.
+revoke execute on function public.recalculate_streak(uuid) from public, anon, authenticated;
+
+-- PostgREST caches the schema: reload it so sync_push/sync_pull are callable (and the dropped
+-- columns/policies are reflected) right after this migration, without restarting the API.
+notify pgrst, 'reload schema';
