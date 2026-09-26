@@ -5,6 +5,8 @@ import {
   cancelHabitReminder,
   getNotificationPermissionStatus,
 } from "@/lib/notifications";
+import { getRemindersEnabled } from "@/lib/reminder-settings";
+import type { LocalStore } from "@rock_ht/local-db";
 import type {
   CreateHabitInput,
   HabitWithFrequency,
@@ -15,12 +17,13 @@ export const HABITS_KEY = ["habits"] as const;
 
 // A reminder scheduling/cancellation failure must never fail the mutation or roll
 // back the already-applied optimistic UI, so every call here is best-effort.
-async function syncReminder(habit: HabitWithFrequency): Promise<void> {
+async function syncReminder(habit: HabitWithFrequency, store: LocalStore): Promise<void> {
   try {
-    // The OS permission status stands in for the app's global "Habit reminders"
-    // setting: there's no separate persisted toggle, and rebuildRemindersFromStore
-    // (Settings' own resync) gates on this same check.
-    if ((await getNotificationPermissionStatus()) === "granted") {
+    // Both the Settings switch and the OS permission must allow reminders
+    const enabled =
+      (await getRemindersEnabled(store)) &&
+      (await getNotificationPermissionStatus()) === "granted";
+    if (enabled) {
       await scheduleHabitReminder(habit);
     } else {
       await cancelHabitReminder(habit.id);
@@ -60,7 +63,7 @@ export function useHabits() {
       queryClient.setQueryData<HabitWithFrequency[]>(HABITS_KEY, (old) =>
         old ? [...old, habit] : [habit]
       );
-      await syncReminder(habit);
+      await syncReminder(habit, store);
     },
     onSettled: invalidate,
   });
@@ -68,7 +71,7 @@ export function useHabits() {
   const updateMutation = useMutation({
     mutationFn: (input: UpdateHabitInput) => store.updateHabit(input),
     onSuccess: async (habit) => {
-      await syncReminder(habit);
+      await syncReminder(habit, store);
     },
     onSettled: invalidate,
   });

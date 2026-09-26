@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   View,
   Text,
@@ -10,11 +9,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { useLocal } from "@/providers/local-provider";
 import { useNotifications } from "@/hooks/use-notifications";
 import { rebuildRemindersFromStore } from "@/hooks/use-reminders";
+import { cancelAllHabitReminders } from "@/lib/notifications";
+import {
+  REMINDERS_SETTING_KEY,
+  getRemindersEnabled,
+  setRemindersEnabled,
+} from "@/lib/reminder-settings";
 import { hapticLight, hapticError } from "@/lib/haptics";
 import { exportToShareSheet, importFromPicker } from "@/lib/backup";
 import { useTheme } from "@/theme/theme-provider";
@@ -191,8 +196,13 @@ export default function SettingsScreen() {
   const { store, userId } = useLocal();
   const { isGranted, isLoading, requestPermission, sendTest } =
     useNotifications();
-  const [notifEnabled, setNotifEnabled] = useState(false);
   const queryClient = useQueryClient();
+  const remindersSetting = useQuery({
+    queryKey: REMINDERS_SETTING_KEY,
+    queryFn: () => getRemindersEnabled(store),
+  });
+  // On only when the saved switch and the OS permission both allow reminders
+  const notifEnabled = (remindersSetting.data ?? false) && isGranted;
   const { name: activeTheme, colors, setTheme } = useTheme();
 
   async function handleThemeChange(next: ThemeName) {
@@ -231,10 +241,13 @@ export default function SettingsScreen() {
           return;
         }
       }
-      setNotifEnabled(true);
+      await setRemindersEnabled(store, true);
+      await queryClient.invalidateQueries({ queryKey: REMINDERS_SETTING_KEY });
       await rebuildRemindersFromStore(store, userId);
     } else {
-      setNotifEnabled(false);
+      await setRemindersEnabled(store, false);
+      await queryClient.invalidateQueries({ queryKey: REMINDERS_SETTING_KEY });
+      await cancelAllHabitReminders();
     }
   }
 

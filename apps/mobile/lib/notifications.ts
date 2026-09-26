@@ -65,15 +65,20 @@ export async function scheduleHabitReminder(habit: ReminderHabit): Promise<strin
  */
 export async function rebuildReminders(habits: ReminderHabit[]): Promise<number> {
   if ((await getNotificationPermissionStatus()) !== "granted") return 0;
+  await cancelAllHabitReminders();
+  let count = 0;
+  for (const habit of habits) count += (await scheduleHabitReminder(habit)).length;
+  return count;
+}
+
+/** Cancels every per-habit reminder; the daily digest (no habitId) is left alone. */
+export async function cancelAllHabitReminders(): Promise<void> {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
     scheduled
       .filter((n) => typeof n.content.data?.["habitId"] === "string")
       .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
   );
-  let count = 0;
-  for (const habit of habits) count += (await scheduleHabitReminder(habit)).length;
-  return count;
 }
 
 export async function cancelHabitReminder(habitId: string): Promise<void> {
