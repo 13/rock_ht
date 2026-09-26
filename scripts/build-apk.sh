@@ -140,7 +140,10 @@ gradle_args+=("-ProckVersionName=$VERSION_NAME" "-ProckVersionCode=$VERSION_CODE
 builtin cd "$ANDROID_DIR"
 [ "$do_clean" = 1 ] && ./gradlew "${gradle_args[@]}" clean
 echo "== assembleRelease (abi: $abi, version: $VERSION_NAME / $VERSION_CODE)"
-./gradlew "${gradle_args[@]}" assembleRelease
+# EXPO_PUBLIC_* values (build date, commit, update API base) are inlined by
+# Metro but are not Gradle task inputs, so an otherwise unchanged tree would
+# reuse the previous JS bundle with stale values. Always rebundle.
+./gradlew "${gradle_args[@]}" assembleRelease :app:createBundleReleaseJsAndAssets --rerun
 
 UNSIGNED="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
 [ -f "$UNSIGNED" ] || die "gradle produced no $UNSIGNED"
