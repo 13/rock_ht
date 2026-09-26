@@ -196,6 +196,10 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
+Upgrading an existing project to the offline-sync schema (`008_sync.sql`)? Read
+[docs/supabase-008-rollout.md](docs/supabase-008-rollout.md) first: pre-checks, backup, order of
+push and web deploy, verification and rollback.
+
 5. (Optional) Load seed data:
 
 ```bash
@@ -234,6 +238,8 @@ Migration files live in `supabase/migrations/` and run in filename order:
 | `001_initial_schema.sql` | Core tables: habits, completions, streaks, journal |
 | `002_rls_policies.sql` | Row-level security — users see only their own data |
 | `003_functions_triggers.sql` | Streak computation triggers, helper functions |
+| `004`–`007` | Profile backfill, localization, subscriptions, timezone-aware streaks |
+| `008_sync.sql` | Offline sync: tombstones, `server_seq`, deterministic completion ids, `sync_push`/`sync_pull` RPCs ([rollout](docs/supabase-008-rollout.md)) |
 
 ---
 
