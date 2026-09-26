@@ -6,9 +6,13 @@ export const runtime = 'nodejs'
 
 /**
  * `POST /api/sync/push` body `{ changes: SyncChange[] }` -> 204 when every change was applied (or
- * lost last-write-wins), 200 `{ skipped: [{ tbl, id, reason, detail? }] }` when `sync_push_for`
+ * lost last-write-wins), 200 `{ skipped: [{ tbl, id, reason: 'rejected' }] }` when `sync_push_for`
  * skipped some (an id another account owns, or a change it can't apply). The client acks both: a
  * skipped change would be skipped again forever, so it only surfaces the count as a warning.
+ * `sync_push_for`'s own reason ('foreign_owner' vs 'invalid') and `detail` (a raw Postgres error
+ * message) never leave the server — they'd tell a client whether an id it guessed belongs to another
+ * account, and could leak schema details — so the response always says just 'rejected'; the real
+ * reason/detail is in the server log line below.
  * Authenticated by the better-auth session cookie only: the mobile client sends it as an explicit
  * `Cookie` header with no `Origin`, so nothing here may require one. 401 without a session (the
  * client maps it to "signed out"). 415 unless the body is declared as JSON, 413 over 5 MB or 500
@@ -39,9 +43,9 @@ export async function POST(req: Request) {
   }
   if (!body || !Array.isArray(body.changes)) return new Response('Bad request', { status: 400 })
   if (body.changes.length > MAX_PUSH_CHANGES) return new Response('Too many changes', { status: 413 })
-  let skipped: unknown[]
+  let skipped: { tbl?: string; id?: string | null; reason?: string; detail?: string }[]
   try {
-    const { rows } = await getPool().query<{ result: { skipped?: unknown[] } | null }>(
+    const { rows } = await getPool().query<{ result: { skipped?: typeof skipped } | null }>(
       'select public.sync_push_for($1, $2::jsonb) as result', [userId, JSON.stringify(body.changes)])
     skipped = rows[0]?.result?.skipped ?? []
   } catch (err) {
@@ -49,8 +53,13 @@ export async function POST(req: Request) {
     return new Response('Sync push failed', { status: 500 })
   }
   if (skipped.length === 0) return new Response(null, { status: 204 })
-  console.warn(`[sync/push] ${skipped.length} change(s) skipped for ${userId}`)
-  return Response.json({ skipped }, { status: 200 })
+  // The real reason/detail (which id belongs to another account, or the raw Postgres error) stays in
+  // this log line; the client only ever learns that something was rejected (see the doc comment above).
+  console.warn(`[sync/push] ${skipped.length} change(s) skipped for ${userId}:`,
+    skipped.map((s) => `${s.tbl}/${s.id}: ${s.reason}${s.detail ? ` (${s.detail})` : ''}`).join(', '))
+  return Response.json({
+    skipped: skipped.map((s) => ({ tbl: s.tbl, id: s.id ?? null, reason: 'rejected' })),
+  }, { status: 200 })
 }
 
 /** The body as text, or null once it exceeds `limit` bytes (reading stops there). */

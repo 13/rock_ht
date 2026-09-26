@@ -386,9 +386,12 @@ describe('one device switching accounts (copy into the new account)', () => {
     expect(first.status).toBe(204)
     const res = await push(b.cookie, { changes: [habit(h, 'mine', 9)] })
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'foreign_owner' }] })
+    // The route never reveals `foreign_owner` (or any Postgres detail) to the client: every skipped
+    // reason comes back as the generic 'rejected'. sync.int.test.ts covers sync_push_for's own,
+    // more specific reason directly against the SQL function.
+    expect(await res.json()).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'rejected' }] })
     // Through the real client: the skipped list comes back from push and runSync counts it.
-    expect(await client(b.cookie).push([habit(h, 'mine', 10)])).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'foreign_owner' }] })
+    expect(await client(b.cookie).push([habit(h, 'mine', 10)])).toEqual({ skipped: [{ tbl: 'habits', id: h, reason: 'rejected' }] })
     const store = await device()
     await store.ensureProfile(b.id)
     await store.sync.applyRemote([{ table: 'habits', row: { ...habit(h, 'mine', 11).row, user_id: b.id } }], null)

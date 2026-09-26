@@ -30,8 +30,12 @@ function newQueryClient(): QueryClient {
  *
  * `resetQueries` runs in a passive effect: React runs children's effects before their parent's, so by
  * then every mounted `useQuery` has already applied its new options (a `queryFn` bound to the new
- * `userId`). The single render in between shows the same rows under the old id — both identity
- * switches re-own this device's rows rather than swapping them out.
+ * `userId`). There's one render in between where a mounted query still reads under the old id: for
+ * sign-in/reconnecting to the same account (`claim`'s already-owned path) that shows the same rows,
+ * since ids don't change; but for sign-up, disconnect-then-different-account, or any switch `claim`
+ * re-keys (see `packages/local-db`'s `claim`/`rekey`), the row ids themselves change, so that one
+ * frame briefly shows either nothing (new, still-empty ids) or the previous identity's now-orphaned
+ * rows until the reset lands a moment later — never a mix of two identities' data at rest.
  */
 export function QueryProvider({ children }: { children: ReactNode }) {
   const { userId } = useLocal();

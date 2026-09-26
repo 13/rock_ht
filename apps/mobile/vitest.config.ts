@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 // Plain-Node tests for app logic that doesn't touch native modules (providers, hooks rendered with
@@ -9,7 +9,8 @@ export default defineConfig({
     globals: false,
     environment: "node",
     include: ["**/__tests__/**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**", "android/**", "ios/**"],
+    // Extend, not replace, vitest's own default exclusions (node_modules, dist, .git, config files, …).
+    exclude: [...configDefaults.exclude, "android/**", "ios/**"],
   },
   // Same `@/` alias as tsconfig.json's paths, so modules under test can import app code.
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url).href) } },

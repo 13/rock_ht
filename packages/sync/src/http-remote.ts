@@ -81,7 +81,16 @@ export function createHttpRemote({ baseUrl, fetch: f, getHeaders }: HttpRemoteOp
       if (res.status === 204) return { skipped: [] }
       const text = await res.text()
       if (!text) return { skipped: [] }
-      const body = JSON.parse(text) as { skipped?: SkippedChange[] }
+      // A 200 must mean `{ skipped }`, but treat a body that isn't valid JSON (e.g. a proxy's HTML
+      // error page returned with a 2xx status) the same as no skipped changes rather than throwing:
+      // the push itself already succeeded server-side, so blocking the outbox on an unparsable body
+      // would just retry the same change forever.
+      let body: { skipped?: SkippedChange[] }
+      try {
+        body = JSON.parse(text) as { skipped?: SkippedChange[] }
+      } catch {
+        return { skipped: [] }
+      }
       return { skipped: Array.isArray(body.skipped) ? body.skipped : [] }
     },
     async pull(cursor, limit): Promise<PullResult> {

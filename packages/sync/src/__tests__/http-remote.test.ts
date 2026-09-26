@@ -35,6 +35,15 @@ describe('createHttpRemote', () => {
     expect(await r2.push([])).toEqual({ skipped: [] })
   })
 
+  it('treats a 200 push with a non-JSON body (e.g. a proxy error page) as nothing skipped, not a thrown error', async () => {
+    const r = createHttpRemote({
+      baseUrl: 'https://x.test',
+      fetch: async () => new Response('<html>Bad Gateway</html>', { status: 200 }),
+      getHeaders: async () => ({}),
+    })
+    expect(await r.push([])).toEqual({ skipped: [] })
+  })
+
   it('GETs pull with cursor and normalizes timestamps', async () => {
     const body = {
       changes: [{

@@ -15,7 +15,18 @@ import { getPool } from './db'
  */
 export const SIGNUP_PROFILE_UPDATED_AT = '1970-01-01T00:00:00.001Z'
 
+// The literal placeholder .env.selfhost.example shipped before it started leaving this value empty.
+// A copy-pasted .env.selfhost from that era would otherwise sign every session with a secret anyone
+// who has ever read this repo also has.
+const OLD_PLACEHOLDER_SECRET = 'generate-with-openssl-rand-base64-32'
+
 function create() {
+  if (process.env.BETTER_AUTH_SECRET === OLD_PLACEHOLDER_SECRET) {
+    throw new Error(
+      'BETTER_AUTH_SECRET is still the placeholder from an old .env.selfhost.example. ' +
+      'Generate a real one (openssl rand -hex 32) and set it in .env.selfhost.',
+    )
+  }
   return betterAuth({
     database: getPool(),
     emailAndPassword: { enabled: true },
