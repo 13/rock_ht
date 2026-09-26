@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a signed release APK of the rock mobile app, optionally install it.
 #
-# Output: dist/rock_ht-<versionName>-<gitShortSha>-release.apk
+# Output: dist/rock_ht-<versionName>-<versionCode>-<gitShortSha>-release.apk
 #
 # Signs with the same release keystore as Apex Maps (MUH Studios cert), so
 # phones carrying a script-built rock APK only accept updates signed with it;
@@ -88,6 +88,16 @@ export EXPO_PUBLIC_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export EXPO_PUBLIC_GIT_SHA="$(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD -- || echo '+dirty')"
 export EXPO_PUBLIC_UPDATE_REPO="${EXPO_PUBLIC_UPDATE_REPO:-13/rock_ht}"
 
+# EXPO_PUBLIC_UPDATE_API_BASE points the in-app update check at a fixture
+# server instead of the real GitHub API; it must never end up in a build
+# that ships. Warn loudly whenever it's set, and refuse outright when HEAD is
+# exactly on a release tag (the one case that would otherwise ship it).
+if [ -n "${EXPO_PUBLIC_UPDATE_API_BASE:-}" ]; then
+    echo "WARNING: update API override in effect: EXPO_PUBLIC_UPDATE_API_BASE=$EXPO_PUBLIC_UPDATE_API_BASE" >&2
+    tag="$(git -C "$ROOT" describe --tags --exact-match --match 'v*' HEAD 2>/dev/null || true)"
+    [ -z "$tag" ] || die "EXPO_PUBLIC_UPDATE_API_BASE is set while HEAD is on release tag $tag - refusing to build a release pointed at a non-default update API"
+fi
+
 # ---- toolchain -------------------------------------------------------------
 # a stale ANDROID_HOME (e.g. root-owned /opt/android-sdk without accepted
 # licenses) fails the NDK auto-install; fall back to the user SDK
@@ -154,7 +164,7 @@ APKSIGNER="$(find "$SDK/build-tools" -name apksigner | sort -V | tail -1)"
 
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 mkdir -p "$DIST"
-OUT="$DIST/rock_ht-$VERSION_NAME-$SHA-release.apk"
+OUT="$DIST/rock_ht-$VERSION_NAME-$VERSION_CODE-$SHA-release.apk"
 
 # minSdk 24: v1 (JAR) signing is only read by Android 6 and older
 echo "== signing"
