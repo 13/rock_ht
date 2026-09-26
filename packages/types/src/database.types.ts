@@ -1,3 +1,19 @@
+/**
+ * Supabase schema types for supabase/migrations/001-008, HAND-EDITED on top of the generator's
+ * output. After regenerating (`supabase gen types typescript --local`), re-apply these edits, or the
+ * web/mobile type-checks and device-row fixtures break:
+ *
+ * 1. `server_seq` is OPTIONAL (`server_seq?: number`) in the Row type of profiles, habits,
+ *    habit_completions and journal_entries (the generator emits `server_seq: number`). It is a
+ *    server-only change counter; sync pulls strip it, so rows that come from a device (local-db,
+ *    fixtures, optimistic rows) never carry it.
+ * 2. `habit_completions.Insert.id` is REQUIRED (`id: string`) and must always be
+ *    `completion_id(habit_id, completed_date)` (`completionId` in @rock_ht/sync): 008 drops the
+ *    column default, and every client sends the deterministic id.
+ * 3. The check-constrained text columns `profiles.theme`, `profiles.time_format` and
+ *    `profiles.date_format` are narrowed to literal unions (the generator emits `string`).
+ * 4. The doc comments on the fields above.
+ */
 export type Json =
   | string
   | number
