@@ -6,3 +6,4 @@ export * from "./templates";
 export * from "./achievements";
 export * from "./insights";
 export * from "./subscription";
+export * from "./app-update";
