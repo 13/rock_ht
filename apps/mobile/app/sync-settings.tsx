@@ -178,6 +178,7 @@ export default function SyncSettingsScreen() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hadOtherAccount, setHadOtherAccount] = useState(false);
 
   useEffect(() => {
     void loadSyncConfig().then((c) => {
@@ -186,7 +187,11 @@ export default function SyncSettingsScreen() {
       if (c.kind === "selfhost") setUrl(c.baseUrl);
       if (c.kind === "supabase") { setUrl(c.url); setAnonKey(c.anonKey); }
     });
-  }, []);
+    // Non-empty whenever this device's rows have been claimed by any account before (see
+    // `LocalStore.previousAccounts`), so signing in again — to that account or a new one — copies
+    // this device's data in under (possibly new) ids rather than starting from an empty account.
+    void store.previousAccounts().then((accounts) => setHadOtherAccount(accounts.length > 0));
+  }, [store]);
 
   // Connected = a backend is saved and an account is signed in on this device.
   const connected = saved !== null && saved.kind !== "off" && sync.status !== "off";
@@ -450,6 +455,16 @@ export default function SyncSettingsScreen() {
                   />
 
                   {errorBox}
+
+                  {hadOtherAccount ? (
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
+                      <Ionicons name="information-circle-outline" size={14} color={colors.warning} style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 12, color: colors.warning, lineHeight: 17 }}>
+                        This device's data came from another account. Signing in copies it into this
+                        account (it may appear twice if this account already has it).
+                      </Text>
+                    </View>
+                  ) : null}
 
                   <Button
                     label={mode === "signup" ? "Create account" : "Sign in"}

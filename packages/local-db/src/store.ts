@@ -472,10 +472,24 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
    * The accounts in `ACCOUNTS_KEY`. A device synced by a build that predates that key has none
    * recorded; if it holds a pull cursor its rows' owner has synced (only an account's sync run stores
    * one, and `claim` clears it), so that owner is taken as an account.
+   *
+   * A corrupt `ACCOUNTS_KEY` (should never happen; meta is only ever written by `claim` as
+   * `JSON.stringify` of a string array) falls back to the same legacy path as a missing one: the
+   * current row owners are taken as accounts. That's the conservative direction — it can only make
+   * `claim` re-key rows that didn't need it, never skip a re-key a foreign id actually needs.
    */
-  async function claimedAccounts(tx: SqlDriver): Promise<string[]> {
+  async function claimedAccounts(tx: SqlDriver = driver): Promise<string[]> {
     const raw = await getMeta(ACCOUNTS_KEY, tx)
-    if (raw) return JSON.parse(raw) as string[]
+    if (raw) {
+      try {
+        const parsed: unknown = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) return parsed
+        console.warn('claim: claimed_accounts was not a string array; falling back to row owners', raw)
+      } catch (e) {
+        console.warn('claim: claimed_accounts is not valid JSON; falling back to row owners', e)
+      }
+      return rowOwners(tx)
+    }
     if (!(await getMeta(CURSOR_KEY, tx))) return []
     return (await rowOwners(tx))
   }
@@ -613,5 +627,12 @@ export function createLocalStore({ driver, newId, now, timeZone = deviceTimeZone
     setMeta: (key: string, value: string | null) => setMeta(key, value),
     exportBackup, importBackup,
     claim, sync,
+    /**
+     * Every account this device's rows have ever been claimed under (see `claim`), regardless of
+     * whether one is the current identity. A non-empty list means this device's data came from
+     * another account at some point, so a UI can warn before a further sign-in/sign-up copies it in
+     * again under a new id (`claim`'s re-key) and possibly duplicates it in the target account.
+     */
+    previousAccounts: () => claimedAccounts(),
   }
 }

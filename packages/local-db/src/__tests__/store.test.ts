@@ -489,6 +489,18 @@ describe('LocalStore claim', () => {
     expect(await store.getMeta('account_user_id')).toBeNull()
     expect(await store.listHabits(U)).toHaveLength(1)
   })
+
+  it('previousAccounts is empty for a never-claimed device and lists every account after claims', async () => {
+    const s = await newStore()
+    expect(await s.previousAccounts()).toEqual([])
+    await s.ensureProfile(U)
+    await s.claim('account-1', { pushLocalProfile: true })
+    expect(await s.previousAccounts()).toEqual(['account-1'])
+    await s.setMeta('local_user_id', 'account-1')
+    await s.setMeta('account_user_id', null)
+    await s.claim('account-2', { pushLocalProfile: true })
+    expect(await s.previousAccounts()).toEqual(['account-1', 'account-2'])
+  })
 })
 
 /** Everything in a table, tombstones included, straight from the store's own reader. */
@@ -627,6 +639,21 @@ describe('LocalStore claim to a different account (copy into the new account)', 
     const habits = await s.listHabits('account-B')
     expect(habits).toHaveLength(1)
     expect(habits[0]!.id).not.toBe(h.id)
+  })
+
+  it('treats a corrupt claimed_accounts as the legacy case (falls back to row owners, still re-keys)', async () => {
+    const s = await newStore()
+    const { h1 } = await syncedThenDisconnected(s)
+    await s.setMeta('claimed_accounts', 'not valid json{')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await (await s.claim('account-B', { pushLocalProfile: true })).completed
+    } finally {
+      warn.mockRestore()
+    }
+    const habits = await s.listHabits('account-B')
+    expect(habits).toHaveLength(1)
+    expect(habits[0]!.id).not.toBe(h1.id)
   })
 
   it('re-keys every completion before the claim resolves, so an interrupted re-queue resumes with new ids', async () => {
