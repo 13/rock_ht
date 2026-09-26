@@ -171,6 +171,9 @@ export async function reorderHabits(
         .from("habits")
         .update({ sort_order, updated_at: new Date().toISOString() })
         .eq("id", id)
+        // Never touch a tombstone: bumping its updated_at would resurface nothing but still
+        // produce a pointless sync change for every device.
+        .is("deleted_at", null)
     )
   );
 }
